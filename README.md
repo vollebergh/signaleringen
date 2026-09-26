@@ -1,6 +1,6 @@
 # Signaleringen — Edge-extensie
 
-Browserversie van de Android-app. Volgt RSS-feeds en webpagina's per profiel,
+Volgt RSS-feeds, webpagina's en zoekopdrachten op open.overheid.nl per profiel,
 filtert de publicaties op relevantie met een LLM en bundelt de relevante
 publicaties tot **één signalering per profiel**.
 
@@ -20,8 +20,8 @@ inspecteer je via de link *service worker* op diezelfde kaart.
 
 1. Open het dashboard (pictogram → **Dashboard**, of via `edge://extensions` → Opties)
 2. **Instellingen** → route op *Eigen API-key in deze browser*, plak je
-   OpenRouter-key en sla op. De browser vraagt dan toestemming voor
-   `openrouter.ai`.
+   OpenRouter-key en sla op. Voor `openrouter.ai` is geen host-toestemming
+   nodig: de API staat verzoeken vanuit de browser toe (CORS).
 3. Laat **Model** op `@preset/signaleringen` staan. Die preset zit in de
    OpenRouter-workspace `signaleringen` en draagt de provider-routing
    (`order: ["deepinfra"]`, `allow_fallbacks: false`).
@@ -40,10 +40,13 @@ Maak naast `manifest.json` een bestand `local-settings.json` (voorbeeld:
 { "directApiKey": "sk-or-…" }
 ```
 
-Het key-veld bij Instellingen staat dan vooringevuld. Klik één keer op
-**Opslaan**, zodat de browser toestemming voor `openrouter.ai` vraagt. Het
-bestand staat in `.gitignore` en komt dus niet in de repo en niet in een
-uitrolpakket.
+Het key-veld bij Instellingen staat dan vooringevuld, zolang er nog geen key
+is opgeslagen — een opgeslagen waarde gaat altijd voor. Het bestand staat in
+`.gitignore` en komt dus niet in de repo en niet in een uitrolpakket.
+
+Het bestand is een gemak voor ontwikkeling, geen opslagplek: de key staat er
+leesbaar in. Gebruik je de vault (zie *Waar de API-key staat*), haal de key
+dan uit dit bestand — de extensie waarschuwt daar ook voor.
 
 ## Uitrol naar collega's
 
@@ -88,6 +91,34 @@ Optioneel, pas gevraagd bij het aanzetten van de betreffende functie:
 | Permissie | Waarvoor |
 | --- | --- |
 | `alarms` | Automatisch synthetiseren op een interval |
+
+## Bronnen
+
+Drie soorten, te kiezen per bron bij *Bewerken*:
+
+| Type | Wat de extensie ophaalt |
+| --- | --- |
+| **RSS/Atom** | De items uit de feed, binnen het ophaalvenster |
+| **Webpagina** | De leesbare tekst van de pagina, als één publicatie |
+| **open.overheid.nl** | Een zoekopdracht op open.overheid.nl: Kamerbrieven, rapporten, Woo-stukken |
+
+Een zoekopdracht op open.overheid.nl stel je samen op de site zelf: zoeken, dan
+*Uitgebreid zoeken* openklappen en ministeries, documentsoorten en eventueel
+een zoekterm kiezen. Plak daarna de URL uit de adresbalk als bron; de extensie
+herkent hem en zet het type zelf goed. Periode, sortering en paginering uit de
+URL worden genegeerd — de extensie haalt steeds de nieuwste publicaties op,
+tot maximaal 200 per scan.
+
+Tips voor een profiel over een beleidsdossier:
+
+- Filter op het ministerie en laat de zoekterm leeg of breed; de
+  relevantiestap past de gebruikersvraag toe. De site kent geen zoeken op een
+  exacte woordgroep.
+- Voeg een **tweede bron** toe met alleen de zoekterm, of met de organisatie
+  *Tweede Kamer*. Kamerstukken, moties en geagendeerde stukken staan vaak
+  niet onder het ministerie maar onder de Kamer of zonder organisatie.
+
+Technische achtergrond: *Referentie - open.overheid.nl zoek-API* in de vault.
 
 ## Scannen
 
@@ -158,11 +189,25 @@ Twee routes, in te stellen bij Instellingen:
 
 | Route | Wanneer | Risico |
 | --- | --- | --- |
-| **Eigen API-key in deze browser** (standaard) | Iedere gebruiker heeft een eigen key op eigen naam (B-D09) | De key staat onversleuteld in `chrome.storage.local` en gaat mee in backups en profielsynchronisatie. Aanvaardbaar bij een persoonlijke key met uitgavenlimiet |
+| **Eigen API-key in deze browser** (standaard) | Iedere gebruiker heeft een eigen key op eigen naam (B-D09) | Zonder vault staat de key onversleuteld in `chrome.storage.local` en gaat mee in backups en profielsynchronisatie. Aanvaardbaar bij een persoonlijke key met uitgavenlimiet |
 | **Via een eigen proxy** | Eén key voor meerdere mensen | De key staat server-side; de extensie kent hem niet |
 
 Een gedeelde key hoort nooit in de `direct`-route: wie het pakket of het
 browserprofiel heeft, leest hem uit.
+
+**Vault (optioneel).** Bij Instellingen kun je de key versleutelen met een
+wachtwoordzin: PBKDF2-SHA256 (600.000 iteraties) naar AES-GCM-256. De
+versleutelde key staat in `chrome.storage.local`, de afgeleide sleutel alleen
+in `chrome.storage.session` — in het geheugen, weg bij een herstart van de
+browser. Daarna vraagt de extensie de wachtwoordzin opnieuw; scans en de
+planner wachten tot dan. De vault beschermt de key in het profielbestand,
+backups en synchronisatie; **niet** tegen code die draait terwijl hij
+ontgrendeld is. Een vergeten wachtwoordzin is niet te herstellen: hef de vault
+dan op door de extensiedata te wissen en vul de key opnieuw in.
+
+**Uitgavenlimiet en verbruik** per key regel je in de OpenRouter-workspace
+`signaleringen` (openrouter.ai): daar zet je per key een limiet en zie je het
+verbruik per collega.
 
 ## Proxy-contract
 
@@ -197,8 +242,26 @@ node --test test/parsers.test.mjs
 ```
 
 Dekt de XML-pull-parser, feed-mapping (RSS 2.0 en Atom), datumherkenning,
-HTML-stripping, OPML-import en de reparatie van afgekapte LLM-antwoorden — de
-onderdelen waar een stille fout tot lege scanresultaten leidt.
+HTML-stripping, OPML-import, de reparatie van afgekapte LLM-antwoorden, de
+vertaling van open.overheid-zoek-URL's, de vault en de afbakening van
+bronmateriaal in de prompt — de onderdelen waar een stille fout tot lege
+scanresultaten of een lek leidt.
+
+## Bronmateriaal is data, geen instructie
+
+Feedinhoud komt van derden. Om te voorkomen dat een pagina met "negeer je
+instructies" de beoordeling of de signalering stuurt (prompt-injectie):
+
+- elke publicatie staat in de prompt tussen tags met een per aanroep
+  willekeurige markering, en de systeemprompt verklaart alles daartussen tot
+  data; tags uit de bron zelf worden weggehaald;
+- titel en tekst per publicatie zijn begrensd (`PROMPT_*_MAX_CHARS`);
+- alleen een echte `true` telt als relevant;
+- de signalering wordt gecontroleerd op bronverwijzingen: geen verwijzingen of
+  een nummer dat niet bestaat geeft een zichtbare waarschuwing.
+
+Dat maakt injectie moeilijker, niet onmogelijk. Lees een signalering met een
+waarschuwing daarom na aan de hand van de publicaties.
 
 ## Mapstructuur
 

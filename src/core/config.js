@@ -92,10 +92,10 @@ export const AppConfig = {
 /**
  * Standaardinstellingen.
  *
- * `direct` is de standaardroute: iedere gebruiker voert zijn eigen API-key in.
- * Die staat onversleuteld in `chrome.storage.local` — browseropslag kent geen
- * equivalent van de Android Keystore. Dat is aanvaardbaar bij een persoonlijke
- * key, niet bij een gedeelde: wie het profielbestand kan lezen, leest de key.
+ * `direct` is de standaardroute: iedere gebruiker voert een eigen API-key in
+ * (B-D09). Zonder vault staat die onversleuteld in `chrome.storage.local`;
+ * aanvaardbaar bij een persoonlijke key met uitgavenlimiet, niet bij een
+ * gedeelde. De vault (B-49) versleutelt hem met een wachtwoordzin.
  *
  * `proxy` stuurt in plaats daarvan naar een eigen endpoint dat de key
  * server-side zet. Nodig zodra één key door meerdere mensen gebruikt wordt.
