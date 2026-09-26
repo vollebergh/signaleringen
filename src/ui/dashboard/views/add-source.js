@@ -8,6 +8,7 @@ import { Msg, send } from '../../../core/messages.js';
 import { SourceType, validateSourceUrl } from '../../../core/models.js';
 import { el, clear } from '../../shared/dom.js';
 import { originPattern } from '../../../background/permissions.js';
+import { isOpenOverheidSearchUrl } from '../../../network/open-overheid.js';
 
 export async function renderAddSource() {
   const params = new URLSearchParams(location.search);
@@ -49,7 +50,9 @@ export async function renderAddSource() {
   const typeSelect = el('select', {}, [
     el('option', { value: SourceType.WEB, text: 'Webpagina (tekst van de pagina)' }),
     el('option', { value: SourceType.RSS, text: 'RSS/Atom-feed' }),
+    el('option', { value: SourceType.OPEN_OVERHEID, text: 'Zoekopdracht op open.overheid.nl' }),
   ]);
+  if (isOpenOverheidSearchUrl(url)) typeSelect.value = SourceType.OPEN_OVERHEID;
 
   root.append(
     el('h2', { text: 'Bron toevoegen' }),

@@ -11,6 +11,8 @@ import { AppConfig } from './config.js';
 export const SourceType = Object.freeze({
   RSS: 'RSS',
   WEB: 'WEB',
+  // Zoekopdracht op open.overheid.nl, via de JSON-API achter de site (B-57)
+  OPEN_OVERHEID: 'OPEN_OVERHEID',
 });
 
 const newId = () => crypto.randomUUID();

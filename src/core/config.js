@@ -50,6 +50,14 @@ export const AppConfig = {
   // Batching — voorkomt afgekapte responses bij grote feeds (zie B-20)
   LLM_BATCH_SIZE: 40,
 
+  /**
+   * Plafond per open.overheid-bron per scan. Een brede zoekopdracht (een heel
+   * ministerie) levert zo'n 40 publicaties per week; na lang niet scannen kan
+   * het venster er honderden bevatten. Liever de oudste overslaan dan één scan
+   * de hele batchverwerking laten opsouperen.
+   */
+  OPEN_OVERHEID_MAX_RESULTS: 200,
+
   // Bewaartermijn
   SCANS_TO_KEEP_PER_PROFILE: 5,
 

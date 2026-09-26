@@ -9,6 +9,7 @@ import { Msg, send } from '../../../core/messages.js';
 import { createProfile, createSource, SourceType, validateSourceUrl } from '../../../core/models.js';
 import { el, clear, formatDateTime, openUrl } from '../../shared/dom.js';
 import { originPattern } from '../../../background/permissions.js';
+import { isOpenOverheidSearchUrl } from '../../../network/open-overheid.js';
 
 /**
  * Keuzes voor het scaninterval. Een select met vaste stappen in plaats van een
@@ -182,7 +183,7 @@ export async function renderProfileEdit(profileId) {
     clear(sourceList);
     if (draft.sources.length === 0) {
       sourceList.append(
-        el('p', { class: 'muted', text: 'Nog geen bronnen. Voeg een RSS-feed of webpagina toe.' }),
+        el('p', { class: 'muted', text: 'Nog geen bronnen. Voeg een RSS-feed, webpagina of zoekopdracht op open.overheid.nl toe.' }),
       );
     }
     draft.sources.forEach((source, index) => {
@@ -203,6 +204,12 @@ export async function renderProfileEdit(profileId) {
     urlInput.addEventListener('input', () => {
       source.url = urlInput.value.trim();
       urlError.textContent = validateSourceUrl(source.url) ?? '';
+      // Een geplakte zoek-URL van open.overheid.nl is geen feed en geen
+      // gewone webpagina — die herkennen we meteen.
+      if (isOpenOverheidSearchUrl(source.url)) {
+        source.type = SourceType.OPEN_OVERHEID;
+        syncType();
+      }
       refreshPermissions();
     });
     urlError.textContent = validateSourceUrl(source.url) ?? '';
@@ -212,28 +219,37 @@ export async function renderProfileEdit(profileId) {
       source.name = nameInput.value;
     });
 
-    const rssButton = el('button', { text: 'RSS/Atom' });
-    const webButton = el('button', { text: 'Webpagina' });
-    const syncType = () => {
-      rssButton.setAttribute('aria-pressed', String(source.type === SourceType.RSS));
-      webButton.setAttribute('aria-pressed', String(source.type === SourceType.WEB));
-    };
-    rssButton.addEventListener('click', () => {
-      source.type = SourceType.RSS;
-      syncType();
+    const typeButtons = [
+      [SourceType.RSS, 'RSS/Atom'],
+      [SourceType.WEB, 'Webpagina'],
+      [SourceType.OPEN_OVERHEID, 'open.overheid.nl'],
+    ].map(([type, text]) => {
+      const button = el('button', { text });
+      button.addEventListener('click', () => {
+        source.type = type;
+        syncType();
+      });
+      return { type, button };
     });
-    webButton.addEventListener('click', () => {
-      source.type = SourceType.WEB;
-      syncType();
+    function syncType() {
+      for (const { type, button } of typeButtons) {
+        button.setAttribute('aria-pressed', String(source.type === type));
+      }
+      openOverheidHint.style.display = source.type === SourceType.OPEN_OVERHEID ? '' : 'none';
+    }
+    const openOverheidHint = el('div', {
+      class: 'hint',
+      text: 'Stel de zoekopdracht samen op open.overheid.nl (Uitgebreid zoeken: ministerie, documentsoort, eventueel een zoekterm) en plak de URL uit de adresbalk. De extensie haalt steeds de nieuwste publicaties op; periode en sortering uit de URL worden genegeerd.',
     });
     syncType();
 
     return el('div', { class: 'source-card' }, [
       el('div', { class: 'grid' }, [nameInput, urlInput]),
       urlError,
+      openOverheidHint,
       sourceHistoryLine(source),
       el('div', { class: 'row-between', style: 'margin-top:8px' }, [
-        el('div', { class: 'type-toggle' }, [rssButton, webButton]),
+        el('div', { class: 'type-toggle' }, typeButtons.map((t) => t.button)),
         el('div', { class: 'row' }, [
           el('button', {
             text: 'Openen',

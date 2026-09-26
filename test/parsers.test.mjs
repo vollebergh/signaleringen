@@ -278,3 +278,78 @@ test('mergeSettings: onbekende sleutels en lege waarden uit het lokale bestand t
   assert.equal('onzin' in merged, false);
   assert.equal(merged.model, DefaultSettings.model);
 });
+
+// ── open.overheid.nl (B-57) ──────────────────────────────────────────────────
+
+import {
+  isOpenOverheidSearchUrl,
+  toApiUrl,
+  formatApiDate,
+  mapResults,
+} from '../src/network/open-overheid.js';
+
+const LVVN = 'ministerie van Landbouw, Visserij, Voedselzekerheid en Natuur';
+const SITE_URL =
+  'https://open.overheid.nl/zoeken?zoeken=stikstof&pagina=3&aantal=10&sort=relevantie' +
+  '&organisatie=ministerie+van+Landbouw%2C+Visserij%2C+Voedselzekerheid+en+Natuur' +
+  '&organisatie=Tweede+Kamer&documentsoort=Kamerbrief&publicatiedatumVan=01-01-2020';
+
+test('isOpenOverheidSearchUrl herkent alleen de zoekpagina van open.overheid.nl', () => {
+  assert.equal(isOpenOverheidSearchUrl(SITE_URL), true);
+  assert.equal(isOpenOverheidSearchUrl('https://open.overheid.nl/zoeken/'), true);
+  assert.equal(isOpenOverheidSearchUrl('https://open.overheid.nl/details/abc'), false);
+  assert.equal(isOpenOverheidSearchUrl('https://example.nl/zoeken?zoeken=x'), false);
+  assert.equal(isOpenOverheidSearchUrl('geen url'), false);
+});
+
+test('formatApiDate geeft DD-MM-JJJJ', () => {
+  assert.equal(formatApiDate(new Date(2026, 8, 5, 12).getTime()), '05-09-2026');
+});
+
+test('toApiUrl codeert filters dubbel en komma-gescheiden, en negeert UI-paginering en -periode', () => {
+  const api = new URL(toApiUrl(SITE_URL, { since: new Date(2026, 8, 20, 12).getTime(), start: 50 }));
+  assert.equal(api.origin + api.pathname, 'https://open.overheid.nl/overheid/openbaarmakingen/api/v0/zoek');
+
+  const raw = api.search;
+  const expectedOrg = `${encodeURIComponent(encodeURIComponent(LVVN))},Tweede%2520Kamer`;
+  assert.ok(raw.includes(`organisatie=${expectedOrg}`), raw);
+  assert.ok(raw.includes('documentsoort=Kamerbrief'));
+  assert.ok(raw.includes('zoektekst=stikstof'));
+  assert.ok(raw.includes('start=50'));
+  assert.ok(raw.includes('aantalResultaten=50'));
+  assert.ok(raw.includes('sort=publicatiedatum'));
+  assert.ok(raw.includes('publicatiedatumVan=20-09-2026'));
+  assert.ok(!raw.includes('pagina='));
+  assert.ok(!raw.includes('01-01-2020'));
+});
+
+test('toApiUrl zonder venster laat de datum weg', () => {
+  assert.ok(!toApiUrl(SITE_URL).includes('publicatiedatumVan'));
+});
+
+test('mapResults: fragment gaat voor omschrijving, publisher als context, pid als link', () => {
+  const pubs = mapResults(
+    {
+      totaal: 2,
+      resultaten: [
+        {
+          document: {
+            titel: 'Kamerbrief over stikstof',
+            omschrijving: 'Standaardzin',
+            pid: 'https://open.overheid.nl/documenten/abc',
+            openbaarmakingsdatum: '2026-09-25',
+            publisher: LVVN,
+          },
+          highlightedText: 'over de <b>rekenkundige ondergrens</b>',
+        },
+        { document: { titel: '', pid: 'https://open.overheid.nl/documenten/leeg' } },
+      ],
+    },
+    'LVVN',
+  );
+  assert.equal(pubs.length, 1);
+  assert.equal(pubs[0].url, 'https://open.overheid.nl/documenten/abc');
+  assert.equal(pubs[0].description, `${LVVN} — over de rekenkundige ondergrens`);
+  assert.equal(pubs[0].publishedDate, Date.parse('2026-09-25'));
+  assert.equal(pubs[0].sourceName, 'LVVN');
+});

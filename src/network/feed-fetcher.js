@@ -1,5 +1,6 @@
 /**
- * Haalt publicaties op uit RSS/Atom-feeds en webpagina's.
+ * Haalt publicaties op uit RSS/Atom-feeds, webpagina's en zoekopdrachten op
+ * open.overheid.nl (die laatste in open-overheid.js).
  * Directe port van FeedFetcher.kt, inclusief de datumvarianten en de
  * retry-strategie.
  */
@@ -10,15 +11,19 @@ import { SourceType, createPublication } from '../core/models.js';
 import { log } from '../core/logger.js';
 import { parseXml, decodeEntities } from './xml-parser.js';
 import { fetchWithTimeout, withRetry, isTransientStatus, classifyFetchError } from './http.js';
+// Wederzijdse import: open-overheid.js gebruikt stripHtml hieronder. Veilig,
+// omdat beide kanten de ander pas bij een aanroep nodig hebben.
+import { fetchOpenOverheid } from './open-overheid.js';
 
 /**
  * @param {import('../core/models.js').Source} source
  * @param {number} since epoch-millis; oudere publicaties worden overgeslagen
  */
 export function fetchPublications(source, since) {
-  return withRetry(source.name || source.url, () =>
-    source.type === SourceType.WEB ? fetchWeb(source) : fetchRss(source, since),
-  );
+  return withRetry(source.name || source.url, () => {
+    if (source.type === SourceType.OPEN_OVERHEID) return fetchOpenOverheid(source, since);
+    return source.type === SourceType.WEB ? fetchWeb(source) : fetchRss(source, since);
+  });
 }
 
 async function fetchBody(source) {
