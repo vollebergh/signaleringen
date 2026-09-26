@@ -276,7 +276,11 @@ async function executeScan(profileId, options) {
           createdAt: Date.now(),
           text: synthesis.text,
           sources: synthesis.sources,
+          warnings: synthesis.warnings,
         });
+        if (synthesis.warnings.length > 0) {
+          log.warn(`Synthese voor '${profile.name}' met waarschuwingen`, synthesis.warnings);
+        }
         await markSynthesised(
           profileId,
           scanId,

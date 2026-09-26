@@ -78,6 +78,7 @@ function synthesisCard(synthesis, profile, expanded) {
 
   details.append(
     summary,
+    ...(synthesis.warnings ?? []).map((warning) => el('p', { class: 'error', text: `⚠ ${warning}` })),
     el('div', { class: 'synthesis', text: synthesis.text }),
     el('div', { class: 'actions', style: 'margin-top:10px' }, [
       el('button', {

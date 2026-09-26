@@ -47,6 +47,16 @@ export const AppConfig = {
    */
   LLM_REASONING_EFFORT: 'none',
 
+  /**
+   * Lengtegrenzen per publicatie in de prompt (B-44). Houdt één bron met een
+   * lange lap tekst — al dan niet met ingebedde instructies — in toom. De
+   * synthese krijgt iets meer ruimte dan het filter, omdat zij de inhoud moet
+   * samenvatten en niet alleen beoordelen.
+   */
+  PROMPT_TITLE_MAX_CHARS: 300,
+  PROMPT_FILTER_TEXT_MAX_CHARS: 1_000,
+  PROMPT_SYNTHESIS_TEXT_MAX_CHARS: 2_000,
+
   // Batching — voorkomt afgekapte responses bij grote feeds (zie B-20)
   LLM_BATCH_SIZE: 40,
 

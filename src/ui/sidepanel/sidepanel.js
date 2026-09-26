@@ -84,6 +84,9 @@ async function loadLatest() {
     );
 
     if (latest.synthesis?.text) {
+      for (const warning of latest.synthesis.warnings ?? []) {
+        content.append(el('p', { class: 'error', text: `⚠ ${warning}` }));
+      }
       content.append(el('div', { class: 'synthesis', text: latest.synthesis.text }));
     } else if (latest.synthesis?.error) {
       content.append(el('p', { class: 'error', text: `Synthese mislukt: ${latest.synthesis.error}` }));
