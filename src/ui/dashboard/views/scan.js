@@ -1,0 +1,238 @@
+/**
+ * Scanresultaat: eerst de gebundelde signalering, daarna de publicaties waarop
+ * die is gebaseerd, daarna wat is weggefilterd.
+ *
+ * De volgorde is de kern van het verschil met de Android-app: daar is het
+ * eindproduct een lijst, hier is het één gesynthetiseerd bericht met de lijst
+ * als onderbouwing.
+ */
+
+import { Msg, send } from '../../../core/messages.js';
+import { el, formatDate, formatDateTime, openUrl } from '../../shared/dom.js';
+
+export async function renderScan(profileId, scanId) {
+  const [profile, results] = await Promise.all([
+    send(Msg.GET_PROFILE, { profileId }),
+    send(Msg.GET_SCAN_RESULTS, { scanId }),
+  ]);
+
+  if (!results) throw new Error('Scan niet gevonden');
+
+  const { scan, relevant, filtered, synthesis } = results;
+  const root = el('div');
+
+  root.append(
+    el('div', { class: 'breadcrumb' }, [
+      el('button', {
+        class: 'icon',
+        text: '← Profielen',
+        onclick: () => {
+          location.hash = '#profielen';
+        },
+      }),
+    ]),
+    el('h2', { text: profile?.name ?? 'Scan' }),
+    el('div', { class: 'scan-meta' }, [
+      el('span', { class: 'badge', text: formatDateTime(scan.scanDate) }),
+      el('span', { class: 'badge', text: `${scan.totalFetched} opgehaald` }),
+      el('span', { class: 'badge', text: `${scan.newCount ?? 0} nieuw` }),
+      el('span', { class: 'badge ok', text: `${relevant.length} relevant` }),
+      el('span', { class: 'badge', text: `${filtered.length} weggefilterd` }),
+    ]),
+    scan.onlyNewPublications
+      ? el('p', {
+          class: 'muted',
+          text: `Beoordeeld: alleen de ${scan.evaluatedCount ?? 0} publicatie(s) die dit profiel nog niet eerder ophaalde. De rest was al bekend.`,
+        })
+      : el('p', {
+          class: 'muted',
+          text: `Beoordeeld: alle ${scan.evaluatedCount ?? scan.totalFetched} opgehaalde publicaties, ook eerder geziene.`,
+        }),
+    sourceStatusSection(scan.sourceStatuses ?? []),
+  );
+
+  // ── Signalering ───────────────────────────────────────────────────────────
+  root.append(el('h3', { class: 'section-title', text: 'Signalering' }));
+
+  if (synthesis?.error) {
+    root.append(
+      el('p', { class: 'error', text: `Synthese mislukt: ${synthesis.error}` }),
+      el('button', {
+        text: 'Opnieuw scannen',
+        onclick: () => {
+          location.hash = `#profielen`;
+        },
+      }),
+    );
+  } else if (synthesis?.text) {
+    root.append(
+      el('div', { class: 'synthesis', text: synthesis.text }),
+      el('div', { class: 'actions', style: 'margin-top:10px' }, [
+        el('button', {
+          text: 'Kopiëren',
+          onclick: (event) => copySynthesis(synthesis, profile, event.currentTarget),
+        }),
+      ]),
+      synthesis.sources?.length
+        ? el('div', {}, [
+            el('p', { class: 'muted', style: 'margin-bottom:0', text: 'Bronverwijzingen' }),
+            el(
+              'ol',
+              { class: 'source-list', style: 'padding-left:1.6em' },
+              synthesis.sources.map((source) =>
+                el('li', {}, [
+                  source.url
+                    ? el('a', {
+                        href: source.url,
+                        text: source.title,
+                        onclick: (event) => {
+                          event.preventDefault();
+                          openUrl(source.url);
+                        },
+                      })
+                    : el('span', { text: source.title }),
+                  el('span', { class: 'muted', text: ` — ${source.sourceName}` }),
+                ]),
+              ),
+            ),
+          ])
+        : null,
+    );
+  } else {
+    root.append(
+      el('p', {
+        class: 'muted',
+        text:
+          relevant.length === 0
+            ? 'Geen relevante publicaties gevonden, dus geen signalering opgesteld.'
+            : 'Nog geen signalering beschikbaar voor deze scan.',
+      }),
+    );
+  }
+
+  // ── Publicaties ───────────────────────────────────────────────────────────
+  root.append(el('h3', { class: 'section-title', text: `Relevant (${relevant.length})` }));
+  if (relevant.length === 0) {
+    root.append(el('p', { class: 'muted', text: 'Geen relevante publicaties in deze scan.' }));
+  } else {
+    relevant.forEach((result) => root.append(publicationRow(result)));
+  }
+
+  if (filtered.length > 0) {
+    const details = el('details', { style: 'margin-top:24px' }, [
+      el('summary', { text: `Weggefilterd (${filtered.length})` }),
+    ]);
+    filtered.forEach((result) => details.append(publicationRow(result)));
+    root.append(details);
+  }
+
+  return root;
+}
+
+/**
+ * Per bron: wat er is opgehaald, hoeveel daarvan nieuw was, en een knop om de
+ * bron zelf in een tabblad te openen.
+ */
+function sourceStatusSection(statuses) {
+  if (statuses.length === 0) return el('div');
+
+  return el('div', { style: 'margin-bottom:16px' }, [
+    el('p', { class: 'muted', style: 'margin-bottom:4px', text: 'Bronnen in deze scan' }),
+    ...statuses.map((status) =>
+      el('div', { class: 'source-row' }, [
+        el('span', {
+          class: status.success ? 'badge ok' : 'badge fail',
+          text: status.success ? 'opgehaald' : 'mislukt',
+        }),
+        el('span', { class: 'source-row-name', text: status.name || status.url }),
+        el('span', {
+          class: 'muted',
+          text: status.success
+            ? `${status.publicationCount} publicatie(s), ${status.newCount ?? 0} nieuw`
+            : (status.errorMessage ?? 'onbekende fout'),
+        }),
+        status.url
+          ? el('button', {
+              class: 'icon',
+              text: 'Openen',
+              title: status.url,
+              onclick: () => openUrl(status.url),
+            })
+          : null,
+      ]),
+    ),
+  ]);
+}
+
+function publicationRow(result) {
+  const pub = result.publication;
+  const row = el('div', { class: result.isRead ? 'publication read' : 'publication' });
+
+  const bookmarkButton = el('button', {
+    class: 'icon',
+    text: result.isBookmarked ? '★ Bewaard' : '☆ Bewaren',
+    onclick: async () => {
+      const next = !result.isBookmarked;
+      await send(Msg.TOGGLE_BOOKMARK, { publicationId: result.id, bookmarked: next });
+      result.isBookmarked = next;
+      bookmarkButton.textContent = next ? '★ Bewaard' : '☆ Bewaren';
+    },
+  });
+
+  row.append(
+    el('div', { class: 'row', style: 'gap:6px; flex-wrap:wrap' }, [
+      el('span', { class: 'title', text: pub.title || '(zonder titel)' }),
+      result.isNew
+        ? el('span', { class: 'badge ok', text: 'nieuw' })
+        : el('span', {
+            class: 'badge',
+            title: result.previousSynthesisAt
+              ? `Verwerkt in de signalering van ${formatDateTime(result.previousSynthesisAt)}`
+              : 'Deze publicatie kwam in een eerdere scan al langs',
+            text: result.previousSynthesisScanId
+              ? `eerder verwerkt · ${formatDate(result.previousSynthesisAt)}`
+              : 'eerder gezien',
+          }),
+    ]),
+    el('div', { class: 'muted', text: result.shortDescription }),
+    el('div', { class: 'links' }, [
+      el('span', { class: 'muted', text: `${pub.sourceName} · ${formatDate(pub.publishedDate)}` }),
+      pub.url
+        ? el('button', {
+            class: 'icon',
+            text: 'Openen',
+            onclick: async () => {
+              if (!result.isRead) {
+                await send(Msg.MARK_AS_READ, { publicationId: result.id });
+                result.isRead = true;
+                row.classList.add('read');
+              }
+              openUrl(pub.url);
+            },
+          })
+        : null,
+      bookmarkButton,
+    ]),
+  );
+
+  return row;
+}
+
+async function copySynthesis(synthesis, profile, button) {
+  const lines = [`Signalering: ${profile?.name ?? ''}`, '', synthesis.text, ''];
+  if (synthesis.sources?.length) {
+    lines.push('Bronnen:');
+    synthesis.sources.forEach((s) => lines.push(`[${s.index}] ${s.title} — ${s.url}`));
+  }
+
+  try {
+    await navigator.clipboard.writeText(lines.join('\n').trim());
+    const original = button.textContent;
+    button.textContent = 'Gekopieerd';
+    setTimeout(() => {
+      button.textContent = original;
+    }, 1500);
+  } catch {
+    button.textContent = 'Kopiëren mislukt';
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "Signaleringen",
+  "version": "0.1.0",
+  "description": "Volgt RSS-feeds en webpagina's per profiel en bundelt de relevante publicaties tot één signalering per onderwerp.",
+  "minimum_chrome_version": "114",
+
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+
+  "background": {
+    "service_worker": "src/background/service-worker.js",
+    "type": "module"
+  },
+
+  "action": {
+    "default_popup": "src/ui/popup/popup.html",
+    "default_title": "Signaleringen"
+  },
+
+  "options_page": "src/ui/dashboard/dashboard.html",
+
+  "side_panel": {
+    "default_path": "src/ui/sidepanel/sidepanel.html"
+  },
+
+  "permissions": [
+    "storage",
+    "contextMenus",
+    "sidePanel"
+  ],
+
+  "optional_permissions": [
+    "alarms"
+  ],
+
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; base-uri 'none'"
+  }
+}

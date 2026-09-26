@@ -1,0 +1,38 @@
+body {
+  padding: 12px 14px 24px;
+}
+
+header {
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  padding-bottom: 10px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+  z-index: 1;
+}
+
+header h1 {
+  font-size: 1.1rem;
+}
+
+#profile-select {
+  margin-top: 8px;
+}
+
+.synthesis {
+  margin: 12px 0;
+  font-size: 0.9rem;
+}
+
+.publication .title {
+  font-size: 0.9rem;
+}
+
+.section-title {
+  margin: 18px 0 6px;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
