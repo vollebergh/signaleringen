@@ -58,7 +58,7 @@ export async function renderSettings() {
   });
 
   directFields.append(
-    field('API-key', directApiKey, 'Je eigen OpenRouter-key uit de workspace signaleringen.'),
+    field('API-key', directApiKey, 'Je persoonlijke OpenRouter-key uit de workspace signaleringen. Die staat op jouw naam en heeft een eigen uitgavenlimiet.'),
     field('Base-URL', directBaseUrl, 'Bijv. https://openrouter.ai/api/v1'),
     el('div', { class: 'permission-warning' }, [
       el('p', {

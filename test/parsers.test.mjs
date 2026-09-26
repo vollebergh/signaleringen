@@ -18,7 +18,8 @@ import { validateSourceUrl, createProfile } from '../src/core/models.js';
 import { assertValidBundle, exportFilename } from '../src/data/transfer-repository.js';
 import { isDue } from '../src/background/scheduler.js';
 import { formatInterval } from '../src/ui/dashboard/views/profiles.js';
-import { AppConfig } from '../src/core/config.js';
+import { AppConfig, DefaultSettings } from '../src/core/config.js';
+import { mergeSettings } from '../src/data/settings-repository.js';
 
 test('decodeEntities vertaalt named, decimale en hexadecimale entities', () => {
   assert.equal(decodeEntities('a &amp; b'), 'a & b');
@@ -260,4 +261,20 @@ test('formatInterval schrijft minuten uit als leesbare periode', () => {
   assert.equal(formatInterval(1440), '1 dag');
   assert.equal(formatInterval(4320), '3 dagen');
   assert.equal(formatInterval(10080), '7 dagen');
+});
+
+test('mergeSettings: key-veld is leeg zonder lokaal bestand', () => {
+  assert.equal(mergeSettings(DefaultSettings, {}, undefined).directApiKey, '');
+});
+
+test('mergeSettings: lokaal bestand vult de key voor, opgeslagen waarde wint', () => {
+  const local = { directApiKey: 'lokaal' };
+  assert.equal(mergeSettings(DefaultSettings, local, undefined).directApiKey, 'lokaal');
+  assert.equal(mergeSettings(DefaultSettings, local, { directApiKey: 'eigen' }).directApiKey, 'eigen');
+});
+
+test('mergeSettings: onbekende sleutels en lege waarden uit het lokale bestand tellen niet', () => {
+  const merged = mergeSettings(DefaultSettings, { onzin: 1, model: '' }, undefined);
+  assert.equal('onzin' in merged, false);
+  assert.equal(merged.model, DefaultSettings.model);
 });

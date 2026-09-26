@@ -1,0 +1,6 @@
+# Lokale standaardinstellingen, o.a. een vooringevulde API-key. Nooit committen,
+# nooit meeleveren — zie "Uitrol naar collega's" in README.md.
+local-settings.json
+
+# Uitrolpakketten
+dist/

@@ -31,6 +31,42 @@ inspecteer je via de link *service worker* op diezelfde kaart.
 6. Per bron **Testen**; de browser vraagt bij de eerste test toestemming voor
    die host.
 
+## Vooringevulde key voor eigen gebruik
+
+Maak naast `manifest.json` een bestand `local-settings.json` (voorbeeld:
+`local-settings.example.json`) met je eigen key:
+
+```json
+{ "directApiKey": "sk-or-…" }
+```
+
+Het key-veld bij Instellingen staat dan vooringevuld. Klik één keer op
+**Opslaan**, zodat de browser toestemming voor `openrouter.ai` vraagt. Het
+bestand staat in `.gitignore` en komt dus niet in de repo en niet in een
+uitrolpakket.
+
+## Uitrol naar collega's
+
+Iedere collega krijgt een **eigen key op zijn of haar naam** uit de
+OpenRouter-workspace `signaleringen`, met een eigen uitgavenlimiet (B-42). In
+de extensie is het key-veld leeg; de collega plakt de eigen key erin (stap 2
+van *Eerste configuratie*). Zie besluit B-D09 in de vault.
+
+Maak het pakket altijd uit git, nooit door de map te kopiëren of te zippen:
+
+```bash
+mkdir -p dist && git archive --format=zip -o dist/signaleringen-$(git describe --always).zip HEAD
+```
+
+`git archive` neemt alleen gecommitte bestanden mee, dus `local-settings.json`
+met jouw key zit er gegarandeerd niet in. Controleer het zo:
+
+```bash
+unzip -l dist/signaleringen-*.zip | grep local-settings
+```
+
+Alleen `local-settings.example.json` hoort daar te staan.
+
 ## Permissiemodel
 
 De extensie declareert geen enkele host-permissie vooraf — alleen
@@ -122,7 +158,7 @@ Twee routes, in te stellen bij Instellingen:
 
 | Route | Wanneer | Risico |
 | --- | --- | --- |
-| **Eigen API-key in deze browser** (standaard) | Iedere gebruiker heeft een eigen key | De key staat onversleuteld in `chrome.storage.local` en gaat mee in backups en profielsynchronisatie. Aanvaardbaar bij een persoonlijke key met uitgavenlimiet |
+| **Eigen API-key in deze browser** (standaard) | Iedere gebruiker heeft een eigen key op eigen naam (B-D09) | De key staat onversleuteld in `chrome.storage.local` en gaat mee in backups en profielsynchronisatie. Aanvaardbaar bij een persoonlijke key met uitgavenlimiet |
 | **Via een eigen proxy** | Eén key voor meerdere mensen | De key staat server-side; de extensie kent hem niet |
 
 Een gedeelde key hoort nooit in de `direct`-route: wie het pakket of het

@@ -14,9 +14,40 @@ import { log } from '../core/logger.js';
 
 const KEY = 'settings';
 
+/**
+ * Optioneel bestand in de extensiemap met lokale standaardwaarden, bijvoorbeeld
+ * een vooringevulde API-key tijdens eigen gebruik. Staat in `.gitignore` en
+ * zit dus niet in een pakket dat met `git archive` gemaakt wordt: collega's
+ * krijgen een leeg key-veld en vullen hun eigen key in (B-D09).
+ */
+const LOCAL_SETTINGS_FILE = 'local-settings.json';
+
+let localDefaults;
+
+async function loadLocalDefaults() {
+  localDefaults ??= fetch(chrome.runtime.getURL(LOCAL_SETTINGS_FILE))
+    .then((response) => (response.ok ? response.json() : {}))
+    .catch(() => ({})); // bestand ontbreekt: gewone situatie in een uitrolpakket
+  return localDefaults;
+}
+
+/**
+ * Standaardwaarden ← lokaal bestand ← opgeslagen instellingen. Uit het lokale
+ * bestand tellen alleen bekende sleutels, en alleen als het geen lege waarde
+ * is — een lege `directApiKey` in het bestand laat de standaard staan.
+ */
+export function mergeSettings(defaults, local, stored) {
+  const known = Object.fromEntries(
+    Object.entries(local ?? {}).filter(
+      ([key, value]) => Object.hasOwn(defaults, key) && value !== '' && value != null,
+    ),
+  );
+  return { ...defaults, ...known, ...(stored ?? {}) };
+}
+
 export async function getSettings() {
-  const stored = await chrome.storage.local.get(KEY);
-  return { ...DefaultSettings, ...(stored[KEY] ?? {}) };
+  const [stored, local] = await Promise.all([chrome.storage.local.get(KEY), loadLocalDefaults()]);
+  return mergeSettings(DefaultSettings, local, stored[KEY]);
 }
 
 export async function saveSettings(patch) {
