@@ -22,7 +22,7 @@ const MODEL_PRESETS = [
 ];
 
 export async function renderSettings() {
-  const settings = await send(Msg.GET_SETTINGS);
+  const [settings, vault] = await Promise.all([send(Msg.GET_SETTINGS), send(Msg.VAULT_STATUS)]);
   const root = el('div');
   const status = el('span', { class: 'muted' });
 
@@ -58,13 +58,11 @@ export async function renderSettings() {
   });
 
   directFields.append(
-    field('API-key', directApiKey, 'Je persoonlijke OpenRouter-key uit de workspace signaleringen. Die staat op jouw naam en heeft een eigen uitgavenlimiet.'),
+    vault.exists
+      ? null
+      : field('API-key', directApiKey, 'Je persoonlijke OpenRouter-key uit de workspace signaleringen. Die staat op jouw naam en heeft een eigen uitgavenlimiet.'),
     field('Base-URL', directBaseUrl, 'Bijv. https://openrouter.ai/api/v1'),
-    el('div', { class: 'permission-warning' }, [
-      el('p', {
-        text: 'Browseropslag is niet versleuteld: deze key staat leesbaar op schijf en gaat mee in een profielbackup of -synchronisatie. Gebruik daarom een key die alleen van jou is, met een uitgavenlimiet — geen key die je met anderen deelt.',
-      }),
-    ]),
+    vaultSection(vault, draft),
   );
 
   const syncTransport = () => {
@@ -240,6 +238,97 @@ export async function renderSettings() {
   }
 
   return root;
+}
+
+/**
+ * Vault voor de API-key (B-49). Zonder vault staat de key leesbaar in de
+ * browseropslag; met vault versleuteld met een wachtwoordzin, en na een
+ * herstart van de browser eerst te ontgrendelen.
+ */
+function vaultSection(vault, draft) {
+  const status = el('span', { class: 'muted' });
+  const passphrase = el('input', { type: 'password', autocomplete: 'new-password', placeholder: 'Wachtwoordzin' });
+  const confirmation = el('input', { type: 'password', autocomplete: 'new-password', placeholder: 'Herhaal wachtwoordzin' });
+
+  const run = async (button, action) => {
+    button.disabled = true;
+    status.className = 'muted';
+    status.textContent = 'Bezig…';
+    try {
+      await action();
+      location.reload();
+    } catch (err) {
+      status.className = 'error';
+      status.textContent = err.message;
+      button.disabled = false;
+    }
+  };
+
+  const children = [];
+
+  if (!vault.exists) {
+    children.push(
+      el('p', {
+        text: 'De key staat nu leesbaar in de browseropslag: wie bij het browserprofiel kan, leest hem, en hij gaat mee in een backup of profielsynchronisatie. Versleutel hem met een wachtwoordzin om dat te voorkomen. Na een herstart van de browser vraagt de extensie de wachtwoordzin opnieuw; automatisch synthetiseren wacht tot dan.',
+      }),
+      el('div', { class: 'grid' }, [passphrase, confirmation]),
+      el('div', { class: 'actions' }, [
+        el('button', {
+          text: 'Key versleutelen',
+          onclick: (e) =>
+            run(e.currentTarget, async () => {
+              if (passphrase.value !== confirmation.value) throw new Error('De wachtwoordzinnen verschillen');
+              // Eerst de key uit het formulier opslaan: de vault versleutelt
+              // wat er opgeslagen staat.
+              await send(Msg.SAVE_SETTINGS, { patch: { directApiKey: draft.directApiKey } });
+              await send(Msg.VAULT_ENABLE, { passphrase: passphrase.value });
+            }),
+        }),
+        status,
+      ]),
+    );
+  } else if (!vault.unlocked) {
+    children.push(
+      el('p', { text: 'De key staat versleuteld en is vergrendeld. Ontgrendel met je wachtwoordzin om te kunnen scannen.' }),
+      passphrase,
+      el('div', { class: 'actions' }, [
+        el('button', {
+          class: 'primary',
+          text: 'Ontgrendelen',
+          onclick: (e) => run(e.currentTarget, () => send(Msg.VAULT_UNLOCK, { passphrase: passphrase.value })),
+        }),
+        status,
+      ]),
+    );
+  } else {
+    children.push(
+      el('p', { text: 'De key staat versleuteld en is ontgrendeld tot je de browser sluit.' }),
+      el('div', { class: 'actions' }, [
+        el('button', { text: 'Nu vergrendelen', onclick: (e) => run(e.currentTarget, () => send(Msg.VAULT_LOCK)) }),
+        el('button', {
+          class: 'danger',
+          text: 'Vault opheffen',
+          title: 'Zet de key weer leesbaar in de browseropslag',
+          onclick: (e) => run(e.currentTarget, () => send(Msg.VAULT_DISABLE)),
+        }),
+        status,
+      ]),
+    );
+  }
+
+  if (vault.exists && vault.localFileHasKey) {
+    children.push(
+      el('p', {
+        class: 'error',
+        text: 'Let op: local-settings.json in de extensiemap bevat nog een leesbare key. Die valt buiten de vault — haal hem daar weg.',
+      }),
+    );
+  }
+
+  return el('div', { class: 'field' }, [
+    el('label', { text: 'Versleuteling van de key' }),
+    el('div', { class: 'permission-warning' }, children),
+  ]);
 }
 
 function input(type, value, onChange) {

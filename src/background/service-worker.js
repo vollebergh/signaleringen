@@ -23,7 +23,16 @@ import { Result } from '../core/result.js';
 import * as profiles from '../data/profile-repository.js';
 import * as scans from '../data/scan-repository.js';
 import { getSourceOverview } from '../data/history-repository.js';
-import { getSettings, saveSettings } from '../data/settings-repository.js';
+import {
+  getSettings,
+  saveSettings,
+  withApiKey,
+  getVaultStatus,
+  enableVault,
+  unlock,
+  lock,
+  disableVault,
+} from '../data/settings-repository.js';
 import { exportProfiles, exportFilename, previewImport, importProfiles } from '../data/transfer-repository.js';
 
 import { fetchPublications } from '../network/feed-fetcher.js';
@@ -203,10 +212,19 @@ const handlers = {
   [Msg.APPLY_SCHEDULE]: () => applySchedule(),
 
   [Msg.TEST_CONNECTION]: async () => {
-    const settings = await getSettings();
+    const settings = await withApiKey(await getSettings());
     const reply = await testConnection(settings);
     return { reply };
   },
+
+  [Msg.VAULT_STATUS]: () => getVaultStatus(),
+  [Msg.VAULT_ENABLE]: ({ passphrase }) => enableVault(passphrase),
+  [Msg.VAULT_UNLOCK]: async ({ passphrase }) => {
+    await unlock(passphrase);
+    await applySchedule();
+  },
+  [Msg.VAULT_LOCK]: () => lock(),
+  [Msg.VAULT_DISABLE]: () => disableVault(),
 };
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {

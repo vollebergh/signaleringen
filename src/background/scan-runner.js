@@ -15,7 +15,7 @@ import { Msg } from '../core/messages.js';
 import { log } from '../core/logger.js';
 import { fetchPublications } from '../network/feed-fetcher.js';
 import { filterPublications, synthesizeProfile } from '../network/llm-client.js';
-import { getSettings, isConfigured, missingConfigMessage } from '../data/settings-repository.js';
+import { getSettings, isConfigured, missingConfigMessage, withApiKey } from '../data/settings-repository.js';
 import { getProfile } from '../data/profile-repository.js';
 import { saveScan, saveSynthesis, pruneOldScans } from '../data/scan-repository.js';
 import {
@@ -74,11 +74,21 @@ async function executeScan(profileId, options) {
   const profile = await getProfile(profileId);
   if (!profile) throw new Error('Profiel niet gevonden');
 
-  const settings = await getSettings();
-  if (!(await isConfigured(settings))) {
-    const message = missingConfigMessage(settings);
+  const stored = await getSettings();
+  if (!(await isConfigured(stored))) {
+    const message = missingConfigMessage(stored);
     setProgress(profileId, { phase: 'error', message });
     throw new Error(message);
+  }
+
+  // Key uit de vault halen vóór er iets opgehaald wordt: een vergrendelde
+  // vault moet de scan tegenhouden, niet pas halverwege laten stranden.
+  let settings;
+  try {
+    settings = await withApiKey(stored);
+  } catch (err) {
+    setProgress(profileId, { phase: 'error', message: err.message });
+    throw err;
   }
 
   // Een scan kan tot een deelverzameling bronnen beperkt worden, zodat je één

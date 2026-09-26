@@ -353,3 +353,31 @@ test('mapResults: fragment gaat voor omschrijving, publisher als context, pid al
   assert.equal(pubs[0].publishedDate, Date.parse('2026-09-25'));
   assert.equal(pubs[0].sourceName, 'LVVN');
 });
+
+// ── Vault voor de API-key (B-49) ─────────────────────────────────────────────
+
+import { createVault, decryptVault, unlockVault } from '../src/core/vault.js';
+
+// Weinig iteraties houdt de test snel; de productiewaarde staat in vault.js.
+const FAST = 1_000;
+
+test('vault: versleutelen en met de sessiesleutel weer ontsleutelen', async () => {
+  const { vault, sessionKey } = await createVault('sk-or-v1-geheim', 'lange wachtwoordzin', FAST);
+  assert.ok(!JSON.stringify(vault).includes('geheim'));
+  assert.equal(await decryptVault(vault, sessionKey), 'sk-or-v1-geheim');
+});
+
+test('vault: ontgrendelen met de juiste wachtwoordzin geeft dezelfde sessiesleutel', async () => {
+  const { vault, sessionKey } = await createVault('sk-or-v1-geheim', 'lange wachtwoordzin', FAST);
+  assert.equal(await unlockVault(vault, 'lange wachtwoordzin'), sessionKey);
+});
+
+test('vault: verkeerde wachtwoordzin wordt geweigerd', async () => {
+  const { vault } = await createVault('sk-or-v1-geheim', 'lange wachtwoordzin', FAST);
+  await assert.rejects(unlockVault(vault, 'verkeerde zin!'), /Onjuiste wachtwoordzin/);
+});
+
+test('vault: te korte wachtwoordzin of lege key wordt geweigerd', async () => {
+  await assert.rejects(createVault('sk-or-v1-geheim', 'kort', FAST), /minstens/);
+  await assert.rejects(createVault('  ', 'lange wachtwoordzin', FAST), /geen key/);
+});

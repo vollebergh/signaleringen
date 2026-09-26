@@ -44,9 +44,10 @@ async function init() {
 
 async function render() {
   try {
-    const [profiles, settings] = await Promise.all([
+    const [profiles, settings, vault] = await Promise.all([
       send(Msg.LIST_PROFILES),
       send(Msg.GET_SETTINGS),
+      send(Msg.VAULT_STATUS),
     ]);
 
     clear(content);
@@ -55,7 +56,7 @@ async function render() {
     const configured =
       settings.transport === 'proxy'
         ? Boolean(settings.proxyUrl?.trim())
-        : Boolean(settings.directApiKey?.trim());
+        : Boolean(settings.directApiKey?.trim()) || vault.exists;
 
     if (!configured) {
       content.append(
@@ -79,6 +80,23 @@ async function render() {
         ]),
       );
       return;
+    }
+
+    if (settings.transport === 'direct' && vault.exists && !vault.unlocked) {
+      content.append(
+        el('div', { class: 'card' }, [
+          el('p', { text: 'De API-key is vergrendeld.' }),
+          el('p', { class: 'muted', text: 'Ontgrendel de vault met je wachtwoordzin om te kunnen scannen.' }),
+          el('button', {
+            class: 'primary',
+            text: 'Ontgrendelen',
+            onclick: () => {
+              chrome.runtime.openOptionsPage();
+              window.close();
+            },
+          }),
+        ]),
+      );
     }
 
     if (profiles.length === 0) {

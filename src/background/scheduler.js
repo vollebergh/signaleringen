@@ -20,7 +20,7 @@ import { log } from '../core/logger.js';
 import { getSettings } from '../data/settings-repository.js';
 import { loadProfiles } from '../data/profile-repository.js';
 import { getLatestScan } from '../data/scan-repository.js';
-import { isConfigured } from '../data/settings-repository.js';
+import { isConfigured, getVaultStatus } from '../data/settings-repository.js';
 import { runScan, isScanning } from './scan-runner.js';
 import { missingOrigins } from './permissions.js';
 
@@ -90,6 +90,12 @@ export async function runDueScans() {
   if (!(await isConfigured(settings))) {
     log.warn('Automatische synthese overgeslagen: nog geen API-key of proxy ingesteld');
     return { ran: 0, skipped: 'not-configured' };
+  }
+
+  const vault = await getVaultStatus();
+  if (vault.exists && !vault.unlocked && settings.transport === 'direct') {
+    log.warn('Automatische synthese overgeslagen: de vault is vergrendeld (bijv. na een herstart van de browser)');
+    return { ran: 0, skipped: 'locked' };
   }
 
   const profiles = await loadProfiles();

@@ -40,6 +40,13 @@ export const Msg = Object.freeze({
   SAVE_SETTINGS: 'settings/save',
   TEST_CONNECTION: 'settings/testConnection',
   APPLY_SCHEDULE: 'settings/applySchedule',
+
+  // Vault voor de API-key (B-49)
+  VAULT_STATUS: 'vault/status',
+  VAULT_ENABLE: 'vault/enable',
+  VAULT_UNLOCK: 'vault/unlock',
+  VAULT_LOCK: 'vault/lock',
+  VAULT_DISABLE: 'vault/disable',
 });
 
 /** Verstuurt een bericht naar de service worker en gooit bij een foutantwoord. */
