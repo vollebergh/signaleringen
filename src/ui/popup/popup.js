@@ -234,6 +234,7 @@ chrome.runtime.onMessage.addListener((message) => {
 
   const label = {
     fetching: `Bronnen ophalen (${message.payload.current}/${message.payload.total})…`,
+    prefiltering: `Voorfilteren (${message.payload.total})…`,
     analyzing: `Beoordelen (${message.payload.done}/${message.payload.total})…`,
     synthesizing: 'Signalering opstellen…',
   }[phase];

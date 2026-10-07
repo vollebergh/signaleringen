@@ -231,6 +231,9 @@ Body en antwoord zijn ongewijzigd OpenAI-compatibel. De proxy hoeft alleen:
 De extensie stuurt zelf al `model` mee, plus — als het model géén preset is —
 een `provider`-blok met `{"order":["deepinfra"],"allow_fallbacks":false}`.
 
+De voorfilter met Jev (zie hieronder) gebruikt een ander endpoint
+(`/api/alpha/decisions`) en werkt daarom niet via de proxy.
+
 **Opnieuw proberen en uitwijken.** Bij een 429, 5xx of time-out probeert de
 extensie elke aanroep tot 3 keer opnieuw (2 s, verdubbelend, maximaal 30 s;
 `Retry-After` gaat voor). Blijft de primaire route weigeren, dan wijkt ze uit
@@ -254,8 +257,9 @@ node --test test/parsers.test.mjs
 
 Dekt de XML-pull-parser, feed-mapping (RSS 2.0 en Atom), datumherkenning,
 HTML-stripping, OPML-import, de reparatie van afgekapte LLM-antwoorden, de
-vertaling van open.overheid-zoek-URL's, de vault en de afbakening van
-bronmateriaal in de prompt — de onderdelen waar een stille fout tot lege
+vertaling van open.overheid-zoek-URL's, de vault, de afbakening van
+bronmateriaal in de prompt en de voorfilter met nagebootste Jev-antwoorden
+(normaal, fout → terugval, ontbrekende antwoorden) — de onderdelen waar een stille fout tot lege
 scanresultaten of een lek leidt.
 
 ## Relevant, mogelijk relevant, weggefilterd
@@ -267,6 +271,32 @@ scanresultaat met de score erbij, maar niet in de signalering. Daaronder is ze
 weggefilterd. Twijfelgevallen vallen zo niet meer willekeurig in of uit de
 signalering, maar staan apart om zelf na te kijken. Drempels in
 `AppConfig.RELEVANCE_THRESHOLD` en `POSSIBLE_RELEVANCE_THRESHOLD`.
+
+## Voorfilter met Jev (optioneel)
+
+Bij **Instellingen → Voorfilter** staat één vinkje, standaard uit. Aan legt de
+extensie de te beoordelen publicaties eerst voor aan Jev, het beslismodel van
+TypeSafe (`~typesafe/jev-latest` via OpenRouters alpha-endpoint
+`POST /api/alpha/decisions`, met dezelfde key). Jev geeft per publicatie een
+kans dat ze over de gebruikersvraag gaat; wat onder 0,10 valt
+(`AppConfig.JEV_PREFILTER_THRESHOLD`, 10 op 100) gaat niet meer naar DeepSeek.
+
+- **Waarom:** de relevantiestap van DeepSeek is de trage stap (± 0,8 s per
+  publicatie). Jev zeeft 150 publicaties in ± 1–2 s. Bij een eerste scan of een
+  profiel met veel bronnen scheelt dat ongeveer de helft van de filtertijd; bij
+  vervolgscans met weinig nieuwe publicaties weinig.
+- **Veilig ruim:** de drempel ligt laag, zodat de voorfilter liever te veel
+  doorlaat. Wat Jev wegfiltert, staat bij *Weggefilterd* met het label
+  "voorfilter" en de Jev-score, en wordt als gezien vastgelegd.
+- **Nooit een mislukte scan:** bij elke fout van het alpha-endpoint, een
+  time-out of een ontbrekend antwoord vervalt de voorfilter voor die scan en
+  gaat alles naar DeepSeek. Het scanresultaat meldt dat.
+- **Alleen met een eigen key** (route `direct`): de proxy kent alleen
+  `chat/completions`. In de proxy-route staat het vinkje uitgeschakeld.
+- **Extra verwerker:** met het vinkje aan gaan titels, tekstfragmenten en de
+  gebruikersvraag ook naar TypeSafe.
+
+Achtergrond en metingen: B-D10 in de vault (*Design - Beslissingen*).
 
 ## Bronmateriaal is data, geen instructie
 

@@ -65,9 +65,41 @@ export async function renderSettings() {
     vaultSection(vault, draft),
   );
 
+  // ── Voorfilter (B-58) ─────────────────────────────────────────────────────
+  // Alleen in de route `direct`: de proxy kent alleen chat/completions, niet
+  // het decisions-endpoint van Jev. In de proxy-route uitgeschakeld tonen.
+  const prefilterCheckbox = el('input', { type: 'checkbox' });
+  prefilterCheckbox.checked = Boolean(draft.jevPrefilterEnabled);
+  prefilterCheckbox.style.width = 'auto';
+  prefilterCheckbox.addEventListener('change', () => {
+    draft.jevPrefilterEnabled = prefilterCheckbox.checked;
+  });
+  const prefilterProxyHint = el('div', {
+    class: 'hint error',
+    text: 'Niet beschikbaar via een proxy: die kent alleen chat/completions. Kies de route met een eigen API-key om de voorfilter te gebruiken.',
+  });
+
+  const prefilterField = el('div', { class: 'field' }, [
+    el('label', { class: 'row', style: 'color:var(--text)' }, [
+      prefilterCheckbox,
+      el('span', { text: 'Voorfilter met Jev vóór de relevantiestap' }),
+    ]),
+    el('div', {
+      class: 'hint',
+      text: 'Snellere filtering bij profielen met veel bronnen: het beslismodel Jev zeeft de nieuwe publicaties eerst ruim, en alleen wat overblijft beoordeelt het taalmodel. Bij vervolgscans met weinig nieuwe publicaties scheelt het weinig. Lukt de voorfilter niet, dan gaat alles gewoon naar het taalmodel.',
+    }),
+    el('div', {
+      class: 'hint',
+      text: 'Let op: met dit vinkje aan gaan titels en tekstfragmenten van publicaties, en de gebruikersvraag van het profiel, ook naar TypeSafe (de maker van Jev), via OpenRouter.',
+    }),
+    prefilterProxyHint,
+  ]);
+
   const syncTransport = () => {
     proxyFields.style.display = draft.transport === 'proxy' ? '' : 'none';
     directFields.style.display = draft.transport === 'direct' ? '' : 'none';
+    prefilterCheckbox.disabled = draft.transport !== 'direct';
+    prefilterProxyHint.style.display = draft.transport === 'direct' ? 'none' : '';
   };
   transportSelect.addEventListener('change', () => {
     draft.transport = transportSelect.value;
@@ -176,6 +208,9 @@ export async function renderSettings() {
       modelInput,
       'Een preset (@preset/…) draagt zijn eigen provider-routing. Bij een kaal model-id stuurt de extensie zelf provider "deepinfra" mee, zonder fallback.',
     ),
+
+    el('h3', { class: 'section-title', text: 'Voorfilter' }),
+    prefilterField,
 
     el('h3', { class: 'section-title', text: 'Weergave' }),
     field('Thema', themeSelect),

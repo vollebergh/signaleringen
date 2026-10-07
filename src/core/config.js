@@ -114,6 +114,26 @@ export const AppConfig = {
   LLM_BATCH_SIZE: 40,
 
   /**
+   * Voorfilter met Jev (B-58, besluit B-D10). Optioneel, standaard uit
+   * (`jevPrefilterEnabled`). Jev geeft per publicatie een kans 0–1 dat ze
+   * over de gebruikersvraag gaat; de extensie rekent die om naar 0–100. Wat
+   * onder de drempel valt, gaat niet naar DeepSeek.
+   *
+   * De drempel ligt bewust laag: wat de voorfilter weggooit, ziet het model
+   * nooit. Gemeten op het additionaliteitsprofiel (150 publicaties,
+   * 2026-10-07): bij 10 bleven alle 45 zeker relevante behouden en ging de
+   * helft door; bij 15–20 vielen er 1–3 weg.
+   *
+   * Batches van 40: state plus langste vraag moet binnen 32k tokens blijven.
+   */
+  JEV_MODEL: '~typesafe/jev-latest',
+  JEV_PREFILTER_THRESHOLD: 10,
+  JEV_BATCH_SIZE: 40,
+  JEV_TIMEOUT_MS: 30_000,
+  /** De gebruikersvraag staat in elke noul-vraag; begrensd tegen een uit de hand gelopen profiel. */
+  JEV_QUERY_MAX_CHARS: 500,
+
+  /**
    * Plafond per open.overheid-bron per scan. Een brede zoekopdracht (een heel
    * ministerie) levert zo'n 40 publicaties per week; na lang niet scannen kan
    * het venster er honderden bevatten. Liever de oudste overslaan dan één scan
@@ -168,4 +188,11 @@ export const DefaultSettings = {
    * je dit aanzet. Het interval staat per profiel, niet hier.
    */
   autoScanEnabled: false,
+
+  /**
+   * Voorfilter met Jev vóór de relevantiestap (B-58). Globaal, niet per
+   * profiel. Alleen in de route `direct`: de proxy kent alleen
+   * `chat/completions`. Aan betekent ook TypeSafe als extra verwerker.
+   */
+  jevPrefilterEnabled: false,
 };

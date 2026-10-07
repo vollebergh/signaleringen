@@ -14,7 +14,12 @@ import { Result } from '../core/result.js';
 import { Msg } from '../core/messages.js';
 import { log } from '../core/logger.js';
 import { fetchPublications } from '../network/feed-fetcher.js';
-import { filterPublications, synthesizeProfile } from '../network/llm-client.js';
+import {
+  filterPublications,
+  isPrefilterActive,
+  prefilterPublications,
+  synthesizeProfile,
+} from '../network/llm-client.js';
 import { getSettings, isConfigured, missingConfigMessage, withApiKey } from '../data/settings-repository.js';
 import { getProfile } from '../data/profile-repository.js';
 import { saveScan, saveSynthesis, pruneOldScans } from '../data/scan-repository.js';
@@ -203,11 +208,37 @@ async function executeScan(profileId, options) {
       return { scanId, relevantCount: 0, newCount: 0, totalFetched: fetched.length };
     }
 
-    // ── 2. Relevantie beoordelen ──────────────────────────────────────────
-    setProgress(profileId, { phase: 'analyzing', done: 0, total: toEvaluate.length });
+    // ── 2a. Voorfilter (optioneel, B-58) ──────────────────────────────────
+    // Jev zeeft vóór DeepSeek. Wat eronder valt, telt als beoordeeld en
+    // weggefilterd. Lukt de voorfilter niet, dan gaat alles naar het model.
+    let toJudge = toEvaluate;
+    let prefiltered = [];
+    let prefilter = null;
+    if (isPrefilterActive(settings)) {
+      setProgress(profileId, { phase: 'prefiltering', total: toEvaluate.length });
+      const started = Date.now();
+      const scores = await prefilterPublications(
+        toEvaluate.map((item) => item.publication),
+        profile.userQuery,
+        settings,
+      );
+      if (scores) {
+        toJudge = toEvaluate.filter((_, index) => scores[index].passes);
+        prefiltered = toEvaluate
+          .map((item, index) => ({ item, score: scores[index].score }))
+          .filter((_, index) => !scores[index].passes);
+        prefilter = { status: 'used', durationMs: Date.now() - started };
+        log.info(`Voorfilter: ${prefiltered.length} van ${toEvaluate.length} weggefilterd`);
+      } else {
+        prefilter = { status: 'fallback' };
+      }
+    }
+
+    // ── 2b. Relevantie beoordelen ─────────────────────────────────────────
+    setProgress(profileId, { phase: 'analyzing', done: 0, total: toJudge.length });
 
     const verdicts = await filterPublications(
-      toEvaluate.map((item) => item.publication),
+      toJudge.map((item) => item.publication),
       profile.userQuery,
       settings,
       (done, total) => setProgress(profileId, { phase: 'analyzing', done, total }),
@@ -217,11 +248,25 @@ async function executeScan(profileId, options) {
     // anders komt hetzelfde artikel elke scan terug als nieuw. Bewust ná het
     // filter en alleen met oordeel: mislukt het filter of geeft het voor een
     // batch geen leesbaar antwoord, dan biedt de volgende scan die
-    // publicaties opnieuw aan in plaats van ze stil kwijt te raken.
+    // publicaties opnieuw aan in plaats van ze stil kwijt te raken. Wat de
+    // voorfilter wegfiltert, is wél beoordeeld.
     const judged = verdicts
-      .map((verdict, index) => ({ verdict, item: toEvaluate[index] }))
-      .filter(({ verdict }) => verdict.isJudged);
-    const unjudgedCount = verdicts.length - judged.length;
+      .map((verdict, index) => ({ verdict, item: toJudge[index] }))
+      .filter(({ verdict }) => verdict.isJudged)
+      .concat(
+        prefiltered.map(({ item, score }) => ({
+          item,
+          verdict: {
+            publication: item.publication,
+            shortDescription: item.publication.title,
+            score: null,
+            relevance: 'niet',
+            isRelevant: false,
+            prefilterScore: score,
+          },
+        })),
+      );
+    const unjudgedCount = verdicts.filter((verdict) => !verdict.isJudged).length;
     if (unjudgedCount > 0) {
       log.warn(`${unjudgedCount} publicatie(s) zonder oordeel; de volgende scan biedt ze opnieuw aan`);
     }
@@ -249,6 +294,8 @@ async function executeScan(profileId, options) {
         isRelevant: verdict.isRelevant,
         score: verdict.score,
         relevance: verdict.relevance,
+        // Gezet als de voorfilter (Jev) deze publicatie wegfilterde; 0–100.
+        prefilterScore: verdict.prefilterScore ?? null,
         isNew: item.isNew,
         // Zat deze publicatie al eerder in een signalering? Dan verwijst dit
         // naar die scan, zodat de UI dat kan tonen.
@@ -274,6 +321,8 @@ async function executeScan(profileId, options) {
       relevantCount: relevant.length,
       possibleCount: possible.length,
       filteredCount: filtered.length,
+      prefilteredCount: prefiltered.length,
+      prefilter,
       sourceStatuses,
       scannedSourceIds: sources.map((s) => s.id),
       onlyNewPublications: profile.onlyNewPublications,

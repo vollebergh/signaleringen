@@ -49,6 +49,7 @@ export async function renderScan(profileId, scanId) {
           class: 'muted',
           text: `Beoordeeld: alle ${scan.evaluatedCount ?? scan.totalFetched} opgehaalde publicaties, ook eerder geziene.`,
         }),
+    prefilterNote(scan),
     scan.unjudgedCount
       ? el('p', {
           class: 'error',
@@ -147,6 +148,23 @@ export async function renderScan(profileId, scanId) {
   return root;
 }
 
+/** Wat de voorfilter (Jev, B-58) deed, als die aan stond. */
+function prefilterNote(scan) {
+  if (scan.prefilter?.status === 'used') {
+    return el('p', {
+      class: 'muted',
+      text: `Voorfilter (Jev): ${scan.prefilteredCount ?? 0} van de ${scan.evaluatedCount ?? 0} publicatie(s) vielen al vóór de relevantiestap af. Ze staan bij Weggefilterd, met het label "voorfilter".`,
+    });
+  }
+  if (scan.prefilter?.status === 'fallback') {
+    return el('p', {
+      class: 'muted',
+      text: 'Voorfilter (Jev) was niet bereikbaar of gaf geen bruikbaar antwoord; alle publicaties gingen naar het model.',
+    });
+  }
+  return null;
+}
+
 /**
  * Per bron: wat er is opgehaald, hoeveel daarvan nieuw was, en een knop om de
  * bron zelf in een tabblad te openen.
@@ -202,6 +220,13 @@ function publicationRow(result) {
       el('span', { class: 'title', text: pub.title || '(zonder titel)' }),
       typeof result.score === 'number'
         ? el('span', { class: 'badge', title: 'Relevantiescore van het model (0–100)', text: `score ${result.score}` })
+        : null,
+      typeof result.prefilterScore === 'number'
+        ? el('span', {
+            class: 'badge',
+            title: 'Weggefilterd door de voorfilter (Jev), vóór de relevantiestap. Score 0–100.',
+            text: `voorfilter · score ${result.prefilterScore}`,
+          })
         : null,
       result.isNew
         ? el('span', { class: 'badge ok', text: 'nieuw' })

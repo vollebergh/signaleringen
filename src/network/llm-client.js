@@ -468,6 +468,135 @@ export function repairJsonArray(json) {
   return '[]';
 }
 
+// ── Voorfilter met Jev (B-58) ───────────────────────────────────────────────
+//
+// Jev (TypeSafe) is een beslismodel achter OpenRouters alpha-endpoint
+// `/api/alpha/decisions`. Het schrijft geen tekst maar geeft per vraag een
+// kans ("noul"). Snel (± 1 s per 150 publicaties) en goedkoop, maar als
+// eindoordeel te grof (B-D10); daarom alleen als ruime zeef vóór DeepSeek.
+//
+// Het endpoint is alpha: elke fout, of één ontbrekend antwoord, betekent dat
+// de voorfilter voor de hele scan vervalt en alles naar DeepSeek gaat.
+
+/** Voorfilter gebruiken? Alleen in de route `direct`: de proxy kent alleen chat/completions. */
+export function isPrefilterActive(settings) {
+  return Boolean(settings?.jevPrefilterEnabled) && settings.transport === 'direct';
+}
+
+/**
+ * Het decisions-endpoint naast de ingestelde base-URL:
+ * `https://openrouter.ai/api/v1` → `https://openrouter.ai/api/alpha/decisions`.
+ * Geëxporteerd voor de tests.
+ */
+export function decisionsUrl(baseUrl) {
+  const base = String(baseUrl ?? '').trim().replace(/\/+$/, '');
+  return new URL('../alpha/decisions', `${base}/`).href;
+}
+
+/**
+ * Het verzoek voor één batch. De publicaties staan als JSON in `state`; elke
+ * vraag verwijst naar haar publicatie met de sleutel, zodat tekst van derden
+ * nooit in de instructies zelf staat. Lengtegrenzen als bij het
+ * relevantiefilter (B-44).
+ *
+ * De gebruikersvraag staat wél letterlijk in de instructie ("Gaat
+ * `publicaties.p0` over …?"). Gemeten 2026-10-07: een verwijzing naar de vraag
+ * in de state ("relevant voor `gebruikersvraag`?") scheidt veel slechter — 135
+ * van 151 en 166 van 200 boven de drempel, tegen 73 en 39 zo.
+ * Geëxporteerd voor de tests.
+ */
+export function buildDecisionsRequest(batch, userQuery) {
+  const query = String(userQuery ?? '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[?.!\s]+$/, '')
+    .slice(0, AppConfig.JEV_QUERY_MAX_CHARS);
+  const publicaties = {};
+  const questions = {};
+  batch.forEach((pub, index) => {
+    const key = `p${index}`;
+    publicaties[key] = {
+      bron: sanitizeUntrusted(pub.sourceName, 200),
+      titel: sanitizeUntrusted(pub.title, AppConfig.PROMPT_TITLE_MAX_CHARS),
+      tekst: sanitizeUntrusted(pub.description, AppConfig.PROMPT_FILTER_TEXT_MAX_CHARS),
+    };
+    questions[key] = { type: 'noul', instructions: `Gaat \`publicaties.${key}\` over ${query}?` };
+  });
+  return { model: AppConfig.JEV_MODEL, state: { publicaties }, questions };
+}
+
+/**
+ * Leest de scores uit een decisions-antwoord, in de volgorde van de batch
+ * (0–100). Gooit als er een antwoord ontbreekt of geen kans 0–1 is.
+ * Geëxporteerd voor de tests.
+ */
+export function readDecisions(parsed, size) {
+  if (parsed?.error) {
+    throw new Error(parsed.error.message ?? JSON.stringify(parsed.error));
+  }
+  return Array.from({ length: size }, (_, index) => {
+    const noul = parsed?.answers?.[`p${index}`]?.noul;
+    if (typeof noul !== 'number' || !Number.isFinite(noul) || noul < 0 || noul > 1) {
+      throw new Error(`geen bruikbaar antwoord voor p${index}`);
+    }
+    return Math.round(noul * 100);
+  });
+}
+
+async function decideBatch(batch, userQuery, settings) {
+  const response = await fetchWithTimeout(
+    decisionsUrl(settings.directBaseUrl),
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${settings.directApiKey.trim()}`,
+      },
+      body: JSON.stringify(buildDecisionsRequest(batch, userQuery)),
+    },
+    AppConfig.JEV_TIMEOUT_MS,
+  );
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${apiErrorMessage(text)}`);
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error('antwoord was geen geldige JSON');
+  }
+  return readDecisions(parsed, batch.length);
+}
+
+/**
+ * Zeeft publicaties met Jev vóór de relevantiestap.
+ *
+ * @param {import('../core/models.js').Publication[]} publications
+ * @param {string} userQuery
+ * @param {object} settings
+ * @returns {Promise<Array<{score: number, passes: boolean}> | null>}
+ *   per publicatie de Jev-score (0–100) en of ze door mag; `null` als de
+ *   voorfilter niet bruikbaar was — dan gaat alles naar het model.
+ */
+export async function prefilterPublications(publications, userQuery, settings) {
+  if (publications.length === 0) return [];
+
+  const scores = [];
+  try {
+    for (let start = 0; start < publications.length; start += AppConfig.JEV_BATCH_SIZE) {
+      const batch = publications.slice(start, start + AppConfig.JEV_BATCH_SIZE);
+      scores.push(...(await decideBatch(batch, userQuery, settings)));
+    }
+  } catch (err) {
+    const reason = err?.name === 'AbortError' ? 'timeout' : (err?.message ?? String(err));
+    log.warn(`Voorfilter (Jev) niet bruikbaar, alles gaat naar het model: ${reason}`);
+    return null;
+  }
+
+  return scores.map((score) => ({ score, passes: score >= AppConfig.JEV_PREFILTER_THRESHOLD }));
+}
+
 // ── Synthese ────────────────────────────────────────────────────────────────
 
 const SYNTHESIS_SYSTEM_PROMPT = `Je stelt signaleringen op. Je krijgt publicaties die relevant zijn bevonden voor één onderwerp en schrijft daarover één samenhangend bericht in het Nederlands.

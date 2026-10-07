@@ -12,7 +12,15 @@ import assert from 'node:assert/strict';
 
 import { parseXml, decodeEntities } from '../src/network/xml-parser.js';
 import { parseFeed, parseDate, stripHtml } from '../src/network/feed-fetcher.js';
-import { repairJsonArray, emptyContentMessage } from '../src/network/llm-client.js';
+import {
+  repairJsonArray,
+  emptyContentMessage,
+  isPrefilterActive,
+  decisionsUrl,
+  buildDecisionsRequest,
+  readDecisions,
+  prefilterPublications,
+} from '../src/network/llm-client.js';
 import { parseOpml } from '../src/background/opml.js';
 import { validateSourceUrl, createProfile } from '../src/core/models.js';
 import { assertValidBundle, exportFilename } from '../src/data/transfer-repository.js';
@@ -518,4 +526,151 @@ test('parseVerdicts leest scores, ook als tekst, en begrenst ze op 0–100', () 
   assert.equal(v.get(1).isRelevant, false);
   assert.equal(v.get(2).score, 100);
   assert.equal(v.has(3), false);
+});
+
+// ── Voorfilter met Jev (B-58) ───────────────────────────────────────────────
+
+const pubs = (n) =>
+  Array.from({ length: n }, (_, i) => ({ sourceName: 'Bron', title: `Titel ${i}`, description: `Tekst ${i}` }));
+const directSettings = {
+  transport: 'direct',
+  directBaseUrl: 'https://openrouter.ai/api/v1/',
+  directApiKey: 'sk-test',
+  jevPrefilterEnabled: true,
+};
+
+/** Vervangt fetch tijdelijk; `respond(body, call)` geeft een Response of gooit. */
+async function withFetch(respond, block) {
+  const original = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, options) => {
+    const body = JSON.parse(options.body);
+    calls.push({ url, body, headers: options.headers });
+    return respond(body, calls.length);
+  };
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    return { result: await block(), calls };
+  } finally {
+    globalThis.fetch = original;
+    console.warn = warn;
+  }
+}
+
+const jsonResponse = (data, status = 200) =>
+  new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
+
+/** Antwoord met een noul per vraag uit `nouls` (op de globale index). */
+const answerWith = (nouls) => (body, call) => {
+  const offset = (call - 1) * AppConfig.JEV_BATCH_SIZE;
+  const answers = Object.fromEntries(
+    Object.keys(body.questions).map((key) => [key, { type: 'noul', noul: nouls[offset + Number(key.slice(1))] }]),
+  );
+  return jsonResponse({ model: 'typesafe/jev-test', answers, usage: { input_tokens: 10, cost: 0.00001 } });
+};
+
+test('isPrefilterActive: alleen met vinkje én route direct', () => {
+  assert.equal(DefaultSettings.jevPrefilterEnabled, false);
+  assert.equal(isPrefilterActive(DefaultSettings), false);
+  assert.equal(isPrefilterActive(directSettings), true);
+  assert.equal(isPrefilterActive({ ...directSettings, transport: 'proxy' }), false);
+});
+
+test('decisionsUrl hoort naast de base-URL van OpenRouter', () => {
+  assert.equal(decisionsUrl('https://openrouter.ai/api/v1'), 'https://openrouter.ai/api/alpha/decisions');
+  assert.equal(decisionsUrl('https://openrouter.ai/api/v1/'), 'https://openrouter.ai/api/alpha/decisions');
+});
+
+test('buildDecisionsRequest: publicaties in state, vraag letterlijk in de noul, tekst van derden niet', () => {
+  const request = buildDecisionsRequest(
+    [{ sourceName: 'B', title: 'T', description: 'x'.repeat(5000) }],
+    '  additionaliteit in het\n natuurbeschermingsrecht? ',
+  );
+  assert.equal(request.model, AppConfig.JEV_MODEL);
+  assert.deepEqual(Object.keys(request.state), ['publicaties']);
+  assert.equal(request.state.publicaties.p0.titel, 'T');
+  assert.ok(request.state.publicaties.p0.tekst.length <= AppConfig.PROMPT_FILTER_TEXT_MAX_CHARS + 1);
+  assert.equal(request.questions.p0.type, 'noul');
+  assert.equal(
+    request.questions.p0.instructions,
+    'Gaat `publicaties.p0` over additionaliteit in het natuurbeschermingsrecht?',
+  );
+  const long = buildDecisionsRequest([{ title: 'T' }], 'a'.repeat(5000));
+  assert.ok(long.questions.p0.instructions.length < AppConfig.JEV_QUERY_MAX_CHARS + 40);
+});
+
+test('prefilterPublications: scores 0–100, drempel uit AppConfig, batches van JEV_BATCH_SIZE', async () => {
+  const n = AppConfig.JEV_BATCH_SIZE + 5;
+  const nouls = Array.from({ length: n }, (_, i) => (i % 3 === 0 ? 0.04 : 0.86));
+  nouls[1] = AppConfig.JEV_PREFILTER_THRESHOLD / 100; // precies op de drempel: door
+  const { result, calls } = await withFetch(answerWith(nouls), () =>
+    prefilterPublications(pubs(n), 'vraag', directSettings),
+  );
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].url, 'https://openrouter.ai/api/alpha/decisions');
+  assert.equal(calls[0].headers.Authorization, 'Bearer sk-test');
+  assert.equal(Object.keys(calls[1].body.questions).length, 5);
+  assert.equal(result.length, n);
+  assert.deepEqual(result[0], { score: 4, passes: false });
+  assert.deepEqual(result[1], { score: AppConfig.JEV_PREFILTER_THRESHOLD, passes: true });
+  assert.deepEqual(result[2], { score: 86, passes: true });
+  const last = (n - 1) % 3 === 0;
+  assert.deepEqual(result[n - 1], { score: last ? 4 : 86, passes: !last });
+});
+
+test('prefilterPublications: HTTP-fout of netwerkfout → null (alles naar het model)', async () => {
+  const http = await withFetch(() => jsonResponse({ error: { message: 'rate limited' } }, 429), () =>
+    prefilterPublications(pubs(3), 'vraag', directSettings),
+  );
+  assert.equal(http.result, null);
+
+  const network = await withFetch(() => {
+    throw new TypeError('fetch failed');
+  }, () => prefilterPublications(pubs(3), 'vraag', directSettings));
+  assert.equal(network.result, null);
+});
+
+test('prefilterPublications: fout in een latere batch → null voor de hele scan', async () => {
+  const n = AppConfig.JEV_BATCH_SIZE + 1;
+  const { result, calls } = await withFetch(
+    (body, call) => (call === 1 ? answerWith(Array(n).fill(0.9))(body, call) : jsonResponse({}, 503)),
+    () => prefilterPublications(pubs(n), 'vraag', directSettings),
+  );
+  assert.equal(calls.length, 2);
+  assert.equal(result, null);
+});
+
+test('prefilterPublications: ontbrekende sleutel, onzin-noul of fout in een 200 → null', async () => {
+  const missing = await withFetch(
+    () => jsonResponse({ answers: { p0: { type: 'noul', noul: 0.5 } } }),
+    () => prefilterPublications(pubs(2), 'vraag', directSettings),
+  );
+  assert.equal(missing.result, null);
+
+  const bogus = await withFetch(
+    () => jsonResponse({ answers: { p0: { type: 'noul', noul: '0.5' }, p1: { type: 'noul', noul: 1.7 } } }),
+    () => prefilterPublications(pubs(2), 'vraag', directSettings),
+  );
+  assert.equal(bogus.result, null);
+
+  const inBody = await withFetch(
+    () => jsonResponse({ error: { code: 502, message: 'upstream' } }),
+    () => prefilterPublications(pubs(2), 'vraag', directSettings),
+  );
+  assert.equal(inBody.result, null);
+
+  const notJson = await withFetch(
+    () => new Response('<html>', { status: 200 }),
+    () => prefilterPublications(pubs(2), 'vraag', directSettings),
+  );
+  assert.equal(notJson.result, null);
+});
+
+test('readDecisions leest de antwoorden in volgorde van de batch', () => {
+  assert.deepEqual(
+    readDecisions({ answers: { p1: { noul: 0.123 }, p0: { noul: 0 } } }, 2),
+    [0, 12],
+  );
+  assert.throws(() => readDecisions({ answers: {} }, 1), /p0/);
 });
