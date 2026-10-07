@@ -105,9 +105,11 @@ Drie soorten, te kiezen per bron bij *Bewerken*:
 Een zoekopdracht op open.overheid.nl stel je samen op de site zelf: zoeken, dan
 *Uitgebreid zoeken* openklappen en ministeries, documentsoorten en eventueel
 een zoekterm kiezen. Plak daarna de URL uit de adresbalk als bron; de extensie
-herkent hem en zet het type zelf goed. Periode, sortering en paginering uit de
-URL worden genegeerd — de extensie haalt steeds de nieuwste publicaties op,
-tot maximaal 200 per scan.
+herkent hem en zet het type zelf goed. Kies je op de site een periode, dan
+haalt de extensie die hele periode op, tot maximaal 200 publicaties per scan:
+"Afgelopen week/maand/jaar" schuift mee met de datum, een zelfgekozen periode
+geldt letterlijk. Zonder periode geldt het ophaalvenster van de extensie
+(7 dagen). Sortering en paginering uit de URL worden genegeerd.
 
 Tips voor een profiel over een beleidsdossier:
 

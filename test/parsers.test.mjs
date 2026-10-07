@@ -443,3 +443,36 @@ test('routesFor: preset krijgt de Decart-uitwijk, een eigen model niet', () => {
 
   assert.equal(routesFor({ model: 'anthropic/claude-haiku-4.5' }).length, 1);
 });
+
+// ── Periode uit de open.overheid-URL ─────────────────────────────────────────
+
+import { periodFromSiteUrl, parseApiDate } from '../src/network/open-overheid.js';
+
+test('parseApiDate leest DD-MM-JJJJ en weigert de rest', () => {
+  assert.equal(parseApiDate('07-10-2025'), new Date(2025, 9, 7).getTime());
+  assert.equal(parseApiDate('2025-10-07'), null);
+  assert.equal(parseApiDate(null), null);
+});
+
+test('periodFromSiteUrl: "Afgelopen jaar" schuift mee, ook als de URL een oude vaste datum heeft', () => {
+  const now = new Date(2026, 9, 7, 12).getTime();
+  const p = periodFromSiteUrl(
+    'https://open.overheid.nl/zoeken?zoeken=x&beschikbaarSinds=Afgelopen+jaar&publicatiedatumVan=01-01-2020',
+    now,
+  );
+  assert.equal(p.since, new Date(2025, 9, 7, 12).getTime());
+  assert.equal(p.until, null);
+});
+
+test('periodFromSiteUrl: eigen periode geldt letterlijk; zonder periode null', () => {
+  const p = periodFromSiteUrl(
+    'https://open.overheid.nl/zoeken?beschikbaarSinds=Kies+zelf+een+periode&publicatiedatumVan=01-03-2026&publicatiedatumTot=31-03-2026',
+  );
+  assert.deepEqual(p, { since: new Date(2026, 2, 1).getTime(), until: new Date(2026, 2, 31).getTime() });
+  assert.equal(periodFromSiteUrl('https://open.overheid.nl/zoeken?zoeken=x'), null);
+});
+
+test('toApiUrl neemt een einddatum mee', () => {
+  assert.ok(toApiUrl(SITE_URL, { since: new Date(2026, 2, 1).getTime(), until: new Date(2026, 2, 31).getTime() })
+    .includes('publicatiedatumVan=01-03-2026&publicatiedatumTot=31-03-2026'));
+});
