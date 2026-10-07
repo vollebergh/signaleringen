@@ -499,3 +499,23 @@ test('parseVerdicts geeft null bij onleesbare uitvoer', () => {
   assert.equal(parseVerdicts('[]'), null);
   assert.equal(parseVerdicts(''), null);
 });
+
+// ── Relevantie als score (B-59) ──────────────────────────────────────────────
+
+import { classifyScore } from '../src/network/llm-client.js';
+
+test('classifyScore deelt in langs de drempels uit AppConfig', () => {
+  assert.equal(classifyScore(AppConfig.RELEVANCE_THRESHOLD), 'relevant');
+  assert.equal(classifyScore(AppConfig.RELEVANCE_THRESHOLD - 1), 'mogelijk');
+  assert.equal(classifyScore(AppConfig.POSSIBLE_RELEVANCE_THRESHOLD), 'mogelijk');
+  assert.equal(classifyScore(AppConfig.POSSIBLE_RELEVANCE_THRESHOLD - 1), 'niet');
+});
+
+test('parseVerdicts leest scores, ook als tekst, en begrenst ze op 0–100', () => {
+  const v = parseVerdicts('[{"index":0,"score":92},{"index":1,"score":"45"},{"index":2,"score":150},{"index":3,"score":"veel"}]');
+  assert.equal(v.get(0).relevance, 'relevant');
+  assert.equal(v.get(1).relevance, 'mogelijk');
+  assert.equal(v.get(1).isRelevant, false);
+  assert.equal(v.get(2).score, 100);
+  assert.equal(v.has(3), false);
+});

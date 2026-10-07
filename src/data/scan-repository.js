@@ -68,8 +68,12 @@ export async function getLatestScan(profileId) {
 
 export async function getPublicationsForScan(scanId) {
   const records = await getAllByIndex(Store.PUBLICATIONS, 'scanId', scanId);
+  // Relevant eerst, daarna op score (hoog → laag), daarna nieuwste eerst.
+  // Scans van vóór de scores (B-59) hebben geen score; die vallen terug op datum.
   return records.map(toResult).sort((a, b) => {
     if (a.isRelevant !== b.isRelevant) return a.isRelevant ? -1 : 1;
+    const byScore = (b.score ?? -1) - (a.score ?? -1);
+    if (byScore !== 0) return byScore;
     return b.publication.publishedDate - a.publication.publishedDate;
   });
 }
@@ -85,7 +89,8 @@ export async function getScanResults(scanId) {
   return {
     scan,
     relevant: publications.filter((p) => p.isRelevant),
-    filtered: publications.filter((p) => !p.isRelevant),
+    possible: publications.filter((p) => !p.isRelevant && p.relevance === 'mogelijk'),
+    filtered: publications.filter((p) => !p.isRelevant && p.relevance !== 'mogelijk'),
     synthesis: synthesis ?? null,
   };
 }

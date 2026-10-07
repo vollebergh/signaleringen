@@ -25,6 +25,7 @@ const newId = () => crypto.randomUUID();
  *             publishedDate: number, sourceName: string }} Publication
  * @typedef {{ id: string, scanId: string, publication: Publication,
  *             shortDescription: string, isRelevant: boolean,
+ *             score: number | null, relevance: 'relevant' | 'mogelijk' | 'niet',
  *             isBookmarked: boolean, isRead: boolean }} PublicationResult
  */
 

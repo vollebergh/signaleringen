@@ -86,6 +86,23 @@ export const AppConfig = {
   PROMPT_SYNTHESIS_TEXT_MAX_CHARS: 2_000,
 
   /**
+   * Relevantie als score (B-59). Het model geeft per publicatie 0–100; de
+   * extensie deelt in. "Mogelijk relevant" is zichtbaar in het scanresultaat
+   * maar gaat niet naar de synthese: twijfelgevallen wisselen tussen runs, en
+   * zo ziet de gebruiker ze in plaats van dat ze willekeurig in of uit de
+   * signalering vallen.
+   *
+   * Gekalibreerd op het additionaliteitsprofiel (150 publicaties, 5 runs,
+   * 2026-10-07): bij 65 schommelt "relevant" tussen 44 en 48 en wisselen 7
+   * publicaties tussen runs, bij 60 is dat 44–51 en 12. Het model gebruikt de
+   * 60-er scores zelden, dus 65 en 70 geven hetzelfde. Ondergrens 40: daaronder
+   * zit vooral wat het model in de ene run 0–10 en in de andere 30 geeft.
+   * Details in "Design - Beslissingen" (B-D12).
+   */
+  RELEVANCE_THRESHOLD: 65,
+  POSSIBLE_RELEVANCE_THRESHOLD: 40,
+
+  /**
    * Pogingen per batch als het antwoord geen leesbare JSON-array is. Dat
    * gebeurt af en toe (2026-10-07: 1 van ± 12 batches); een nieuwe poging
    * lukt dan vrijwel altijd. Blijft het mislukken, dan krijgen die

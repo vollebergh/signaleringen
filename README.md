@@ -258,6 +258,16 @@ vertaling van open.overheid-zoek-URL's, de vault en de afbakening van
 bronmateriaal in de prompt — de onderdelen waar een stille fout tot lege
 scanresultaten of een lek leidt.
 
+## Relevant, mogelijk relevant, weggefilterd
+
+Het model geeft elke publicatie een score van 0 tot 100 voor de relevantie
+voor de gebruikersvraag. Vanaf 65 is een publicatie **relevant** en gaat ze
+naar de signalering; 40–64 is **mogelijk relevant**: zichtbaar in het
+scanresultaat met de score erbij, maar niet in de signalering. Daaronder is ze
+weggefilterd. Twijfelgevallen vallen zo niet meer willekeurig in of uit de
+signalering, maar staan apart om zelf na te kijken. Drempels in
+`AppConfig.RELEVANCE_THRESHOLD` en `POSSIBLE_RELEVANCE_THRESHOLD`.
+
 ## Bronmateriaal is data, geen instructie
 
 Feedinhoud komt van derden. Om te voorkomen dat een pagina met "negeer je

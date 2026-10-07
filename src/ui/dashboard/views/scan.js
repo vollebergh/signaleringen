@@ -18,7 +18,7 @@ export async function renderScan(profileId, scanId) {
 
   if (!results) throw new Error('Scan niet gevonden');
 
-  const { scan, relevant, filtered, synthesis } = results;
+  const { scan, relevant, possible = [], filtered, synthesis } = results;
   const root = el('div');
 
   root.append(
@@ -37,6 +37,7 @@ export async function renderScan(profileId, scanId) {
       el('span', { class: 'badge', text: `${scan.totalFetched} opgehaald` }),
       el('span', { class: 'badge', text: `${scan.newCount ?? 0} nieuw` }),
       el('span', { class: 'badge ok', text: `${relevant.length} relevant` }),
+      possible.length > 0 ? el('span', { class: 'badge', text: `${possible.length} mogelijk` }) : null,
       el('span', { class: 'badge', text: `${filtered.length} weggefilterd` }),
     ]),
     scan.onlyNewPublications
@@ -124,6 +125,17 @@ export async function renderScan(profileId, scanId) {
     relevant.forEach((result) => root.append(publicationRow(result)));
   }
 
+  if (possible.length > 0) {
+    root.append(
+      el('h3', { class: 'section-title', text: `Mogelijk relevant (${possible.length})` }),
+      el('p', {
+        class: 'muted',
+        text: 'Twijfelgevallen: het model kon niet goed beoordelen of deze publicaties over je vraag gaan, vaak omdat er weinig tekst beschikbaar was. Ze staan niet in de signalering. Open ze om zelf te kijken.',
+      }),
+    );
+    possible.forEach((result) => root.append(publicationRow(result)));
+  }
+
   if (filtered.length > 0) {
     const details = el('details', { style: 'margin-top:24px' }, [
       el('summary', { text: `Weggefilterd (${filtered.length})` }),
@@ -188,6 +200,9 @@ function publicationRow(result) {
   row.append(
     el('div', { class: 'row', style: 'gap:6px; flex-wrap:wrap' }, [
       el('span', { class: 'title', text: pub.title || '(zonder titel)' }),
+      typeof result.score === 'number'
+        ? el('span', { class: 'badge', title: 'Relevantiescore van het model (0–100)', text: `score ${result.score}` })
+        : null,
       result.isNew
         ? el('span', { class: 'badge ok', text: 'nieuw' })
         : el('span', {

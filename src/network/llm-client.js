@@ -286,10 +286,41 @@ Je antwoordt ALLEEN met een valide JSON-array, zonder extra tekst of uitleg.
 
 Elke publicatie moet beoordeeld worden. Geef voor elke publicatie een JSON-object met:
 - "index": het nummer uit nr="…" van de publicatie (begint bij 0)
-- "relevant": true of false
+- "score": een geheel getal van 0 tot en met 100 voor de relevantie voor de vraag
 - "samenvatting": een korte beschrijving van maximaal 15 woorden in het Nederlands
 
+Schaal voor "score":
+- 80–100: de publicatie gaat aantoonbaar over wat de vraag zoekt
+- 60–79: waarschijnlijk relevant
+- 30–59: twijfel — de tekst is te kort om het te beoordelen, of de publicatie raakt de vraag maar zijdelings
+- 0–29: niet relevant, bijvoorbeeld een ander onderwerp of een andere betekenis van een zoekterm
+
+Gebruik de hele schaal. Geef een lage score als de tekst laat zien dat het om iets anders gaat dan de vraag; geef een middenscore als de tekst te weinig zegt om het te weten.
+
 Antwoord ALLEEN met de JSON-array.`;
+
+/**
+ * Deelt een score in. Geëxporteerd voor de tests.
+ * @returns {'relevant' | 'mogelijk' | 'niet'}
+ */
+export function classifyScore(score) {
+  if (score >= AppConfig.RELEVANCE_THRESHOLD) return 'relevant';
+  if (score >= AppConfig.POSSIBLE_RELEVANCE_THRESHOLD) return 'mogelijk';
+  return 'niet';
+}
+
+/**
+ * Score uit één oordeel: een getal 0–100, of een getal als tekst. Een oud
+ * of afwijkend antwoord met alleen `relevant: true/false` telt als 100/0.
+ * Iets anders is geen oordeel.
+ */
+function readScore(item) {
+  const raw = typeof item.score === 'string' ? Number(item.score.trim()) : item.score;
+  if (typeof raw === 'number' && Number.isFinite(raw)) return Math.min(100, Math.max(0, Math.round(raw)));
+  if (item.relevant === true) return 100;
+  if (item.relevant === false) return 0;
+  return null;
+}
 
 /**
  * Beoordeelt publicaties op relevantie. Verwerkt in batches zodat een lange
@@ -355,7 +386,7 @@ export async function filterPublications(publications, userQuery, settings, onBa
  * Leest de oordelen uit een modelantwoord. Tekst vóór de eerste `[` of na
  * de laatste `]` wordt genegeerd; een afgekapte array wordt gerepareerd.
  * Geëxporteerd voor de tests.
- * @returns {Map<number, {isRelevant: boolean, shortDescription: string}> | null}
+ * @returns {Map<number, {score: number, relevance: string, isRelevant: boolean, shortDescription: string}> | null}
  *   null als er geen bruikbare array in staat
  */
 export function parseVerdicts(content) {
@@ -375,14 +406,19 @@ export function parseVerdicts(content) {
 
   const verdicts = new Map();
   for (const item of array) {
-    if (typeof item?.index === 'number') {
-      verdicts.set(item.index, {
-        // Alleen een echte `true` telt. Een string als "ja, zeker" is geen
-        // antwoord volgens het formaat — mogelijk door bronmateriaal uitgelokt.
-        isRelevant: item.relevant === true,
-        shortDescription: String(item.samenvatting ?? ''),
-      });
-    }
+    if (typeof item?.index !== 'number') continue;
+    // Alleen een getal (of een echte true/false) telt. Een string als
+    // "ja, zeker" is geen antwoord volgens het formaat — mogelijk door
+    // bronmateriaal uitgelokt.
+    const score = readScore(item);
+    if (score === null) continue;
+    const relevance = classifyScore(score);
+    verdicts.set(item.index, {
+      score,
+      relevance,
+      isRelevant: relevance === 'relevant',
+      shortDescription: String(item.samenvatting ?? ''),
+    });
   }
   // Een lege array is geen antwoord op een niet-lege batch: opnieuw vragen.
   return verdicts.size > 0 ? verdicts : null;
@@ -399,6 +435,8 @@ function mapBatch(verdicts, batch) {
     return {
       publication,
       shortDescription: verdict?.shortDescription || publication.title,
+      score: verdict?.score ?? null,
+      relevance: verdict?.relevance ?? 'niet',
       isRelevant: verdict?.isRelevant ?? false,
       isJudged: Boolean(verdict),
     };

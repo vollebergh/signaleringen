@@ -247,6 +247,8 @@ async function executeScan(profileId, options) {
         publication: verdict.publication,
         shortDescription: verdict.shortDescription,
         isRelevant: verdict.isRelevant,
+        score: verdict.score,
+        relevance: verdict.relevance,
         isNew: item.isNew,
         // Zat deze publicatie al eerder in een signalering? Dan verwijst dit
         // naar die scan, zodat de UI dat kan tonen.
@@ -258,7 +260,8 @@ async function executeScan(profileId, options) {
     });
 
     const relevant = results.filter((r) => r.isRelevant);
-    const filtered = results.filter((r) => !r.isRelevant);
+    const possible = results.filter((r) => r.relevance === 'mogelijk');
+    const filtered = results.filter((r) => !r.isRelevant && r.relevance !== 'mogelijk');
 
     const scan = {
       id: scanId,
@@ -269,6 +272,7 @@ async function executeScan(profileId, options) {
       evaluatedCount: toEvaluate.length,
       unjudgedCount,
       relevantCount: relevant.length,
+      possibleCount: possible.length,
       filteredCount: filtered.length,
       sourceStatuses,
       scannedSourceIds: sources.map((s) => s.id),
