@@ -406,3 +406,22 @@ test('checkCitations: geen verwijzingen of onbekende nummers geven een waarschuw
   assert.match(unknown[0], /\[7\]/);
   assert.deepEqual(checkCitations('', 3), []);
 });
+
+// ── Opnieuw proberen bij 429/5xx van de LLM-API ──────────────────────────────
+
+import { parseRetryAfter, retryDelay } from '../src/network/llm-client.js';
+
+test('parseRetryAfter leest seconden en datums, en negeert onzin', () => {
+  assert.equal(parseRetryAfter('5'), 5_000);
+  assert.equal(parseRetryAfter(new Date(10_000).toUTCString(), 4_000), 6_000);
+  assert.equal(parseRetryAfter(null), null);
+  assert.equal(parseRetryAfter('straks'), null);
+});
+
+test('retryDelay groeit exponentieel, volgt Retry-After en blijft onder het plafond', () => {
+  assert.equal(retryDelay(2), AppConfig.LLM_RETRY_INITIAL_DELAY_MS);
+  assert.equal(retryDelay(3), AppConfig.LLM_RETRY_INITIAL_DELAY_MS * 2);
+  assert.equal(retryDelay(2, 7_000), 7_000);
+  assert.equal(retryDelay(9), AppConfig.LLM_RETRY_MAX_DELAY_MS);
+  assert.equal(retryDelay(2, 600_000), AppConfig.LLM_RETRY_MAX_DELAY_MS);
+});

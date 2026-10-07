@@ -22,6 +22,18 @@ export const AppConfig = {
   RETRY_INITIAL_DELAY_MS: 1_000,
   RETRY_BACKOFF_FACTOR: 2,
 
+  /**
+   * Opnieuw proberen bij een LLM-aanroep die op 429 of 5xx stuit. Met
+   * `allow_fallbacks: false` wijkt OpenRouter niet uit naar een andere
+   * provider; zit DeepInfra even aan zijn limiet, dan komt dat als 429
+   * "Provider returned error" terug. Ruimer dan bij feeds: een scan heeft
+   * meerdere batches na elkaar, en één afgewezen batch mag niet de hele scan
+   * laten mislukken. Een `Retry-After` van de server gaat voor, tot het plafond.
+   */
+  LLM_MAX_ATTEMPTS: 5,
+  LLM_RETRY_INITIAL_DELAY_MS: 2_000,
+  LLM_RETRY_MAX_DELAY_MS: 30_000,
+
   // LLM
   LLM_MAX_TOKENS: 16_384,
   LLM_TEMPERATURE: 0.1,

@@ -57,8 +57,58 @@ function resolveEndpoint(settings) {
   };
 }
 
-/** Eén chat-completion. Gooit bij een niet-2xx antwoord. */
-async function complete(settings, { system, user, maxTokens, temperature }) {
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Fout die het waard is opnieuw te proberen: 429, 5xx of een netwerkfout. */
+class TransientLlmError extends Error {
+  constructor(message, retryAfterMs = null) {
+    super(message);
+    this.name = 'TransientLlmError';
+    this.retryAfterMs = retryAfterMs;
+  }
+}
+
+/** `Retry-After` in seconden of als datum → milliseconden, of null. */
+export function parseRetryAfter(value, now = Date.now()) {
+  if (!value) return null;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+  const date = Date.parse(value);
+  return Number.isFinite(date) ? Math.max(0, date - now) : null;
+}
+
+/**
+ * Wachttijd vóór poging `attempt` (vanaf 2): exponentieel vanaf de
+ * beginwaarde, of de `Retry-After` van de server, altijd tot het plafond.
+ * Geëxporteerd voor de tests.
+ */
+export function retryDelay(attempt, retryAfterMs = null) {
+  const backoff = AppConfig.LLM_RETRY_INITIAL_DELAY_MS * 2 ** (attempt - 2);
+  return Math.min(retryAfterMs ?? backoff, AppConfig.LLM_RETRY_MAX_DELAY_MS);
+}
+
+/**
+ * Eén chat-completion, met opnieuw proberen bij een tijdelijke fout. Gooit
+ * bij een definitieve fout, of als ook de laatste poging tijdelijk mislukt.
+ */
+async function complete(settings, request) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await completeOnce(settings, request);
+    } catch (err) {
+      const transient = err instanceof TransientLlmError || err instanceof TypeError || err?.name === 'AbortError';
+      if (!transient) throw err;
+      if (attempt >= AppConfig.LLM_MAX_ATTEMPTS) {
+        throw new Error(`${err.message} — ook na ${attempt} pogingen; probeer het later nog eens`);
+      }
+      const delay = retryDelay(attempt + 1, err.retryAfterMs ?? null);
+      log.warn(`LLM-aanroep poging ${attempt} mislukt (${err.message}); opnieuw over ${Math.round(delay / 1000)} s`);
+      await sleep(delay);
+    }
+  }
+}
+
+async function completeOnce(settings, { system, user, maxTokens, temperature }) {
   const { url, headers } = resolveEndpoint(settings);
 
   const body = {
@@ -87,8 +137,13 @@ async function complete(settings, { system, user, maxTokens, temperature }) {
   const text = await response.text();
   if (!response.ok) {
     log.error(`LLM-fout (${response.status}): ${text.slice(0, 500)}`);
-    const hint = isTransientStatus(response.status) ? ' — probeer het zo nog eens' : '';
-    throw new Error(`LLM-API gaf ${response.status}${hint}: ${apiErrorMessage(text)}`);
+    if (isTransientStatus(response.status)) {
+      throw new TransientLlmError(
+        `LLM-API gaf ${response.status}: ${apiErrorMessage(text)}`,
+        parseRetryAfter(response.headers.get('retry-after')),
+      );
+    }
+    throw new Error(`LLM-API gaf ${response.status}: ${apiErrorMessage(text)}`);
   }
 
   let parsed;
@@ -102,6 +157,9 @@ async function complete(settings, { system, user, maxTokens, temperature }) {
   if (parsed?.error) {
     const message = parsed.error.message ?? JSON.stringify(parsed.error);
     log.error('LLM-fout in een 200-antwoord', parsed.error);
+    if (isTransientStatus(Number(parsed.error.code))) {
+      throw new TransientLlmError(`LLM-API: ${message}`);
+    }
     throw new Error(`LLM-API: ${message}`);
   }
 
