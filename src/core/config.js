@@ -29,10 +29,26 @@ export const AppConfig = {
    * "Provider returned error" terug. Ruimer dan bij feeds: een scan heeft
    * meerdere batches na elkaar, en één afgewezen batch mag niet de hele scan
    * laten mislukken. Een `Retry-After` van de server gaat voor, tot het plafond.
+   *
+   * Pogingen per route: eerst de primaire route (preset → DeepInfra), daarna
+   * de uitwijkroute hieronder. Dus maximaal 2 × 3 aanroepen.
    */
-  LLM_MAX_ATTEMPTS: 5,
+  LLM_ATTEMPTS_PER_ROUTE: 3,
   LLM_RETRY_INITIAL_DELAY_MS: 2_000,
   LLM_RETRY_MAX_DELAY_MS: 30_000,
+
+  /**
+   * Uitwijkroute (besluit B-D11, 2026-10-07): als DeepInfra na alle pogingen
+   * tijdelijk blijft weigeren, DeepSeek V4.1 Flash bij Decart in fp4 — ook
+   * vastgezet, zonder verdere fallback. Alleen voor de standaardmodellen in
+   * `LLM_FALLBACK_FOR`; wie zelf een ander model kiest, krijgt geen
+   * stille modelwissel.
+   */
+  LLM_FALLBACK: {
+    model: 'deepseek/deepseek-v4.1-flash',
+    provider: { order: ['decart'], quantizations: ['fp4'], allow_fallbacks: false },
+  },
+  LLM_FALLBACK_FOR: ['@preset/signaleringen', 'deepseek/deepseek-v4-flash-0731'],
 
   // LLM
   LLM_MAX_TOKENS: 16_384,

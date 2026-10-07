@@ -425,3 +425,21 @@ test('retryDelay groeit exponentieel, volgt Retry-After en blijft onder het plaf
   assert.equal(retryDelay(9), AppConfig.LLM_RETRY_MAX_DELAY_MS);
   assert.equal(retryDelay(2, 600_000), AppConfig.LLM_RETRY_MAX_DELAY_MS);
 });
+
+// ── Uitwijkroute (B-D11) ─────────────────────────────────────────────────────
+
+import { routesFor } from '../src/network/llm-client.js';
+
+test('routesFor: preset krijgt de Decart-uitwijk, een eigen model niet', () => {
+  const preset = routesFor({ model: '@preset/signaleringen' });
+  assert.equal(preset.length, 2);
+  assert.equal(preset[0].provider, null);
+  assert.equal(preset[1].model, 'deepseek/deepseek-v4.1-flash');
+  assert.deepEqual(preset[1].provider, { order: ['decart'], quantizations: ['fp4'], allow_fallbacks: false });
+
+  const bare = routesFor({ model: 'deepseek/deepseek-v4-flash-0731' });
+  assert.deepEqual(bare[0].provider, { order: ['deepinfra'], allow_fallbacks: false });
+  assert.equal(bare.length, 2);
+
+  assert.equal(routesFor({ model: 'anthropic/claude-haiku-4.5' }).length, 1);
+});

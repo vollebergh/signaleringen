@@ -87,32 +87,59 @@ export function retryDelay(attempt, retryAfterMs = null) {
   return Math.min(retryAfterMs ?? backoff, AppConfig.LLM_RETRY_MAX_DELAY_MS);
 }
 
+const isTransient = (err) =>
+  err instanceof TransientLlmError || err instanceof TypeError || err?.name === 'AbortError';
+
 /**
- * Eén chat-completion, met opnieuw proberen bij een tijdelijke fout. Gooit
- * bij een definitieve fout, of als ook de laatste poging tijdelijk mislukt.
+ * De routes die na elkaar geprobeerd worden: de ingestelde (preset of kaal
+ * model met DeepInfra-routing), en voor de standaardmodellen daarna de
+ * uitwijkroute uit AppConfig. Geëxporteerd voor de tests.
  */
-async function complete(settings, request) {
-  for (let attempt = 1; ; attempt += 1) {
-    try {
-      return await completeOnce(settings, request);
-    } catch (err) {
-      const transient = err instanceof TransientLlmError || err instanceof TypeError || err?.name === 'AbortError';
-      if (!transient) throw err;
-      if (attempt >= AppConfig.LLM_MAX_ATTEMPTS) {
-        throw new Error(`${err.message} — ook na ${attempt} pogingen; probeer het later nog eens`);
-      }
-      const delay = retryDelay(attempt + 1, err.retryAfterMs ?? null);
-      log.warn(`LLM-aanroep poging ${attempt} mislukt (${err.message}); opnieuw over ${Math.round(delay / 1000)} s`);
-      await sleep(delay);
-    }
-  }
+export function routesFor(settings) {
+  const primary = {
+    model: settings.model,
+    provider: usesPreset(settings.model) ? null : PROVIDER_ROUTING,
+  };
+  return AppConfig.LLM_FALLBACK_FOR.includes(settings.model) ? [primary, AppConfig.LLM_FALLBACK] : [primary];
 }
 
-async function completeOnce(settings, { system, user, maxTokens, temperature }) {
+/**
+ * Eén chat-completion. Per route opnieuw proberen bij een tijdelijke fout;
+ * blijft de primaire route tijdelijk weigeren, dan de uitwijkroute. Gooit bij
+ * een definitieve fout, of als ook de laatste poging tijdelijk mislukt.
+ */
+async function complete(settings, request) {
+  const routes = routesFor(settings);
+  let lastError;
+
+  for (const [index, route] of routes.entries()) {
+    if (index > 0) {
+      log.warn(`Uitwijken naar ${route.model} (${route.provider?.order?.join(', ') ?? 'standaard'}) na: ${lastError.message}`);
+    }
+    for (let attempt = 1; attempt <= AppConfig.LLM_ATTEMPTS_PER_ROUTE; attempt += 1) {
+      try {
+        return await completeOnce(settings, route, request);
+      } catch (err) {
+        if (!isTransient(err)) throw err;
+        lastError = err;
+        if (attempt === AppConfig.LLM_ATTEMPTS_PER_ROUTE) break;
+        const delay = retryDelay(attempt + 1, err.retryAfterMs ?? null);
+        log.warn(`LLM-aanroep (${route.model}) poging ${attempt} mislukt (${err.message}); opnieuw over ${Math.round(delay / 1000)} s`);
+        await sleep(delay);
+      }
+    }
+  }
+
+  const tried = routes.length * AppConfig.LLM_ATTEMPTS_PER_ROUTE;
+  const via = routes.length > 1 ? ', ook via de uitwijkroute' : '';
+  throw new Error(`${lastError.message} — ook na ${tried} pogingen${via}; probeer het later nog eens`);
+}
+
+async function completeOnce(settings, route, { system, user, maxTokens, temperature }) {
   const { url, headers } = resolveEndpoint(settings);
 
   const body = {
-    model: settings.model,
+    model: route.model,
     messages: [
       { role: 'system', content: system },
       { role: 'user', content: user },
@@ -121,8 +148,8 @@ async function completeOnce(settings, { system, user, maxTokens, temperature }) 
     max_tokens: maxTokens,
   };
 
-  if (!usesPreset(settings.model)) {
-    body.provider = PROVIDER_ROUTING;
+  if (route.provider) {
+    body.provider = route.provider;
   }
 
   // Eén veld voor de redeneerinspanning; 'none' zet het uit. Zie AppConfig.

@@ -229,6 +229,15 @@ Body en antwoord zijn ongewijzigd OpenAI-compatibel. De proxy hoeft alleen:
 De extensie stuurt zelf al `model` mee, plus — als het model géén preset is —
 een `provider`-blok met `{"order":["deepinfra"],"allow_fallbacks":false}`.
 
+**Opnieuw proberen en uitwijken.** Bij een 429, 5xx of time-out probeert de
+extensie elke aanroep tot 3 keer opnieuw (2 s, verdubbelend, maximaal 30 s;
+`Retry-After` gaat voor). Blijft de primaire route weigeren, dan wijkt ze uit
+naar `deepseek/deepseek-v4.1-flash` bij Decart in fp4
+(`{"order":["decart"],"quantizations":["fp4"],"allow_fallbacks":false}`), ook
+weer tot 3 keer. Dat geldt alleen voor de standaardmodellen (de preset en
+`deepseek/deepseek-v4-flash-0731`); een zelf gekozen model wordt nooit
+ongemerkt gewisseld. Instellingen in `AppConfig.LLM_FALLBACK`.
+
 Let op: dit is **geen remote code**. Het Edge-beleid verbiedt het laden en
 uitvoeren van extern gehost script; JSON van een API ophalen is gewoon data en
 is toegestaan. Wel geldt dat een backend tijdens de certificering bereikbaar
