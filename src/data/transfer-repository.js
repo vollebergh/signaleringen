@@ -220,12 +220,21 @@ async function writeEntry(entry, { remap }) {
     sources,
   });
 
+  // Eerst alle scan-id's: publicaties en seen-records verwijzen naar de scan
+  // van een eerdere synthese, en die kan later in de bundel staan.
+  const scanIdMap = new Map(
+    (entry.scans ?? []).map((bundleScan) => [bundleScan.scan.id, remap ? newId() : bundleScan.scan.id]),
+  );
+  // Een verwijzing naar een scan die niet in de bundel zit (al opgeruimd)
+  // wordt bij een kopie leeg: anders wijst de kopie naar het origineel.
+  const mapScanRef = (id) => (id && remap ? (scanIdMap.get(id) ?? null) : (id ?? null));
+
   const scans = [];
   const publications = [];
   const syntheses = [];
 
   for (const bundleScan of entry.scans ?? []) {
-    const scanId = remap ? newId() : bundleScan.scan.id;
+    const scanId = scanIdMap.get(bundleScan.scan.id);
 
     scans.push({
       ...bundleScan.scan,
@@ -246,6 +255,7 @@ async function writeEntry(entry, { remap }) {
           ...publication,
           id: remap ? newId() : publication.id,
           scanId,
+          previousSynthesisScanId: mapScanRef(publication.previousSynthesisScanId),
           // Booleans normaliseren: een oudere export kan hier true/false hebben
           // staan in plaats van 0/1.
           isRelevant: Boolean(publication.isRelevant),
@@ -267,7 +277,7 @@ async function writeEntry(entry, { remap }) {
     ...record,
     id: `${profileId}::${record.key}`,
     profileId,
-    synthesisScanId: null,
+    synthesisScanId: mapScanRef(record.synthesisScanId),
     synthesisAt: record.synthesisAt ?? null,
   }));
 
@@ -288,21 +298,6 @@ async function writeEntry(entry, { remap }) {
       sourceStates.forEach((s) => stores[Store.SOURCE_STATE].put(s));
     },
   );
-
-  // De verwijzing van een seen-record naar "de synthese die hem gebruikte" kan
-  // pas gezet worden nadat de nieuwe scan-id's bekend zijn. Bij remap gaat die
-  // koppeling verloren; het feit dát een publicatie verwerkt is blijft staan
-  // via `synthesisAt`.
-  if (!remap) {
-    const restored = (entry.seen ?? [])
-      .filter((r) => r.synthesisScanId)
-      .map((r) => ({ ...r, id: `${profileId}::${r.key}`, profileId }));
-    if (restored.length > 0) {
-      await transaction(Store.SEEN, 'readwrite', (store) => {
-        restored.forEach((r) => store.put(r));
-      });
-    }
-  }
 }
 
 /** Verwijdert alle data van één profiel. Gebruikt bij `replace`. */
