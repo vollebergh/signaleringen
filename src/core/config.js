@@ -85,6 +85,14 @@ export const AppConfig = {
   PROMPT_FILTER_TEXT_MAX_CHARS: 1_000,
   PROMPT_SYNTHESIS_TEXT_MAX_CHARS: 2_000,
 
+  /**
+   * Pogingen per batch als het antwoord geen leesbare JSON-array is. Dat
+   * gebeurt af en toe (2026-10-07: 1 van ± 12 batches); een nieuwe poging
+   * lukt dan vrijwel altijd. Blijft het mislukken, dan krijgen die
+   * publicaties geen oordeel en biedt de volgende scan ze opnieuw aan.
+   */
+  LLM_PARSE_ATTEMPTS: 3,
+
   // Batching — voorkomt afgekapte responses bij grote feeds (zie B-20)
   LLM_BATCH_SIZE: 40,
 

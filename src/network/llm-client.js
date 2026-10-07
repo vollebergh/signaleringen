@@ -299,7 +299,11 @@ Antwoord ALLEEN met de JSON-array.`;
  * @param {string} userQuery
  * @param {object} settings
  * @param {(done: number, total: number) => void} [onBatch]
- * @returns {Promise<Array<{publication: object, shortDescription: string, isRelevant: boolean}>>}
+ * @returns {Promise<Array<{publication: object, shortDescription: string, isRelevant: boolean, isJudged: boolean}>>}
+ *   `isJudged` is false als het model voor die publicatie, ook na nieuwe
+ *   pogingen, geen bruikbaar oordeel gaf. De aanroeper legt zulke
+ *   publicaties niet vast als gezien, zodat een volgende scan ze opnieuw
+ *   aanbiedt.
  */
 export async function filterPublications(publications, userQuery, settings, onBatch) {
   if (publications.length === 0) return [];
@@ -324,46 +328,79 @@ export async function filterPublications(publications, userQuery, settings, onBa
       )
       .join('\n\n');
 
-    const content = await complete(settings, {
+    const request = {
       system: `${FILTER_SYSTEM_PROMPT}\n\n${untrustedDataRule(marker)}`,
       user: `Beoordeel de volgende publicaties op relevantie voor deze vraag:\n\nVRAAG: ${userQuery}\n\nPUBLICATIES:\n${list}`,
       maxTokens: AppConfig.LLM_MAX_TOKENS,
       temperature: AppConfig.LLM_TEMPERATURE,
-    });
+    };
 
-    results.push(...mapBatch(content, batch));
+    // Een onleesbaar antwoord is meestal eenmalig: opnieuw vragen.
+    let verdicts = null;
+    for (let attempt = 1; attempt <= AppConfig.LLM_PARSE_ATTEMPTS && !verdicts; attempt += 1) {
+      verdicts = parseVerdicts(await complete(settings, request));
+      if (!verdicts) {
+        log.warn(`Batch ${start / batchSize + 1}: antwoord niet leesbaar (poging ${attempt} van ${AppConfig.LLM_PARSE_ATTEMPTS})`);
+      }
+    }
+
+    results.push(...mapBatch(verdicts, batch));
     onBatch?.(Math.min(start + batchSize, publications.length), publications.length);
   }
 
   return results;
 }
 
-function mapBatch(content, batch) {
-  const verdicts = new Map();
-  try {
-    const array = JSON.parse(repairJsonArray(stripCodeFence(content)));
-    for (const item of array) {
-      if (typeof item?.index === 'number') {
-        verdicts.set(item.index, {
-          // Alleen een echte `true` telt. Een string als "ja, zeker" is geen
-          // antwoord volgens het formaat — mogelijk door bronmateriaal uitgelokt.
-          isRelevant: item.relevant === true,
-          shortDescription: String(item.samenvatting ?? ''),
-        });
-      }
-    }
-  } catch (err) {
-    // Onparseerbaar antwoord mag de hele scan niet slopen: de batch valt terug
-    // op "niet relevant" en de gebruiker ziet de publicaties bij de rest.
-    log.warn('Kon LLM-antwoord niet parseren, batch valt terug op niet-relevant', err);
-  }
+/**
+ * Leest de oordelen uit een modelantwoord. Tekst vóór de eerste `[` of na
+ * de laatste `]` wordt genegeerd; een afgekapte array wordt gerepareerd.
+ * Geëxporteerd voor de tests.
+ * @returns {Map<number, {isRelevant: boolean, shortDescription: string}> | null}
+ *   null als er geen bruikbare array in staat
+ */
+export function parseVerdicts(content) {
+  const text = stripCodeFence(content ?? '');
+  const open = text.indexOf('[');
+  if (open === -1) return null;
+  const close = text.lastIndexOf(']');
+  const candidate = close > open ? text.slice(open, close + 1) : text.slice(open);
 
+  let array;
+  try {
+    array = JSON.parse(repairJsonArray(candidate));
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(array)) return null;
+
+  const verdicts = new Map();
+  for (const item of array) {
+    if (typeof item?.index === 'number') {
+      verdicts.set(item.index, {
+        // Alleen een echte `true` telt. Een string als "ja, zeker" is geen
+        // antwoord volgens het formaat — mogelijk door bronmateriaal uitgelokt.
+        isRelevant: item.relevant === true,
+        shortDescription: String(item.samenvatting ?? ''),
+      });
+    }
+  }
+  // Een lege array is geen antwoord op een niet-lege batch: opnieuw vragen.
+  return verdicts.size > 0 ? verdicts : null;
+}
+
+/**
+ * Koppelt de oordelen aan de publicaties van de batch. Zonder oordeel (geen
+ * leesbaar antwoord, of een index die ontbreekt) is een publicatie niet
+ * beoordeeld — dat is iets anders dan "niet relevant".
+ */
+function mapBatch(verdicts, batch) {
   return batch.map((publication, index) => {
-    const verdict = verdicts.get(index);
+    const verdict = verdicts?.get(index);
     return {
       publication,
       shortDescription: verdict?.shortDescription || publication.title,
       isRelevant: verdict?.isRelevant ?? false,
+      isJudged: Boolean(verdict),
     };
   });
 }

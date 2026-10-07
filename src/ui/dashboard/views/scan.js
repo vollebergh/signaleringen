@@ -48,6 +48,12 @@ export async function renderScan(profileId, scanId) {
           class: 'muted',
           text: `Beoordeeld: alle ${scan.evaluatedCount ?? scan.totalFetched} opgehaalde publicaties, ook eerder geziene.`,
         }),
+    scan.unjudgedCount
+      ? el('p', {
+          class: 'error',
+          text: `${scan.unjudgedCount} publicatie(s) kregen geen oordeel: het model gaf ook na nieuwe pogingen geen leesbaar antwoord. Ze staan niet bij de resultaten en worden bij de volgende scan opnieuw aangeboden.`,
+        })
+      : null,
     sourceStatusSection(scan.sourceStatuses ?? []),
   );
 

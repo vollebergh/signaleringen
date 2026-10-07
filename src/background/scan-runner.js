@@ -175,19 +175,6 @@ async function executeScan(profileId, options) {
     const scanDate = Date.now();
     const newItems = fetched.filter((item) => item.isNew);
 
-    // Vastleggen dat we ze gezien hebben, ook als het model ze straks
-    // wegfiltert — anders komt hetzelfde artikel elke scan terug als nieuw.
-    await recordSeen(
-      profileId,
-      scanId,
-      newItems.map((item) => ({
-        key: item.key,
-        url: item.publication.url,
-        title: item.publication.title,
-        sourceName: item.publication.sourceName,
-      })),
-    );
-
     // Wat gaat er naar het model? Standaard alleen wat dit profiel nog niet zag.
     const toEvaluate = profile.onlyNewPublications ? newItems : fetched;
 
@@ -226,8 +213,33 @@ async function executeScan(profileId, options) {
       (done, total) => setProgress(profileId, { phase: 'analyzing', done, total }),
     );
 
-    const results = verdicts.map((verdict, index) => {
-      const item = toEvaluate[index];
+    // Vastleggen wat het model beoordeeld heeft, ook wat het wegfiltert —
+    // anders komt hetzelfde artikel elke scan terug als nieuw. Bewust ná het
+    // filter en alleen met oordeel: mislukt het filter of geeft het voor een
+    // batch geen leesbaar antwoord, dan biedt de volgende scan die
+    // publicaties opnieuw aan in plaats van ze stil kwijt te raken.
+    const judged = verdicts
+      .map((verdict, index) => ({ verdict, item: toEvaluate[index] }))
+      .filter(({ verdict }) => verdict.isJudged);
+    const unjudgedCount = verdicts.length - judged.length;
+    if (unjudgedCount > 0) {
+      log.warn(`${unjudgedCount} publicatie(s) zonder oordeel; de volgende scan biedt ze opnieuw aan`);
+    }
+
+    await recordSeen(
+      profileId,
+      scanId,
+      judged
+        .filter(({ item }) => item.isNew)
+        .map(({ item }) => ({
+          key: item.key,
+          url: item.publication.url,
+          title: item.publication.title,
+          sourceName: item.publication.sourceName,
+        })),
+    );
+
+    const results = judged.map(({ verdict, item }) => {
       return {
         id: crypto.randomUUID(),
         scanId,
@@ -255,6 +267,7 @@ async function executeScan(profileId, options) {
       totalFetched: fetched.length,
       newCount: newItems.length,
       evaluatedCount: toEvaluate.length,
+      unjudgedCount,
       relevantCount: relevant.length,
       filteredCount: filtered.length,
       sourceStatuses,

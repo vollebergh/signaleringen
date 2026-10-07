@@ -476,3 +476,26 @@ test('toApiUrl neemt een einddatum mee', () => {
   assert.ok(toApiUrl(SITE_URL, { since: new Date(2026, 2, 1).getTime(), until: new Date(2026, 2, 31).getTime() })
     .includes('publicatiedatumVan=01-03-2026&publicatiedatumTot=31-03-2026'));
 });
+
+// ── Oordelen uit het modelantwoord lezen ─────────────────────────────────────
+
+import { parseVerdicts } from '../src/network/llm-client.js';
+
+test('parseVerdicts negeert tekst rond de array en code-fences', () => {
+  const v = parseVerdicts('Hier is het antwoord:\n```json\n[{"index":0,"relevant":true,"samenvatting":"a"},{"index":1,"relevant":false}]\n```\nSucces!');
+  assert.equal(v.size, 2);
+  assert.equal(v.get(0).isRelevant, true);
+  assert.equal(v.get(1).isRelevant, false);
+});
+
+test('parseVerdicts repareert een afgekapte array; ontbrekende indexen blijven zonder oordeel', () => {
+  const v = parseVerdicts('[{"index":0,"relevant":true},{"index":1,"relevant":false},{"index":2,"rel');
+  assert.deepEqual([...v.keys()], [0, 1]);
+});
+
+test('parseVerdicts geeft null bij onleesbare uitvoer', () => {
+  assert.equal(parseVerdicts('Ik kan dit niet beoordelen.'), null);
+  assert.equal(parseVerdicts('[{"index":0, "relevant": tru'), null);
+  assert.equal(parseVerdicts('[]'), null);
+  assert.equal(parseVerdicts(''), null);
+});
