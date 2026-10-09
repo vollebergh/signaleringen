@@ -823,12 +823,12 @@ test('selectForSynthesis: hoogste score eerst, bij gelijke score de nieuwste, be
   assert.equal(relevant[0].id, 'a', 'de invoer blijft ongemoeid');
 });
 
-test('normalizeSynthesisMaxArticles: standaard 25, hele getallen, begrensd', () => {
+test('normalizeSynthesisMaxArticles: standaard 25, hele getallen, geen bovengrens', () => {
   assert.equal(DefaultSettings.synthesisMaxArticles, 25);
   assert.equal(normalizeSynthesisMaxArticles(undefined), 25);
   assert.equal(normalizeSynthesisMaxArticles(''), 25);
   assert.equal(normalizeSynthesisMaxArticles('0'), 25);
   assert.equal(normalizeSynthesisMaxArticles('12'), 12);
   assert.equal(normalizeSynthesisMaxArticles(7.6), 8);
-  assert.equal(normalizeSynthesisMaxArticles(5000), AppConfig.SYNTHESIS_MAX_ARTICLES_LIMIT);
+  assert.equal(normalizeSynthesisMaxArticles(5000), 5000);
 });

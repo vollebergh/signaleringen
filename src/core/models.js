@@ -50,13 +50,14 @@ export function normalizeLookbackDays(value) {
 }
 
 /**
- * Maximaal aantal artikelen in de synthese (B-45): een heel getal van 1 tot de
- * bovengrens; iets anders wordt de standaard.
+ * Maximaal aantal artikelen in de synthese (B-45): een heel getal vanaf 1,
+ * zonder bovengrens — de gebruiker gaat over zijn eigen tokenbudget. Iets
+ * anders wordt de standaard.
  */
 export function normalizeSynthesisMaxArticles(value) {
   const count = Math.round(Number(value));
   if (!Number.isFinite(count) || count < 1) return DefaultSettings.synthesisMaxArticles;
-  return Math.min(count, AppConfig.SYNTHESIS_MAX_ARTICLES_LIMIT);
+  return count;
 }
 
 /** @returns {Profile} */

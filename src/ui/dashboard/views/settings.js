@@ -10,7 +10,7 @@ import { Msg, send } from '../../../core/messages.js';
 import { el, clear, labelRow } from '../../shared/dom.js';
 import { originPattern } from '../../../background/permissions.js';
 import { QUANTIZATIONS, validateRouting } from '../../../network/llm-client.js';
-import { AppConfig, DefaultSettings } from '../../../core/config.js';
+import { DefaultSettings } from '../../../core/config.js';
 import { normalizeSynthesisMaxArticles } from '../../../core/models.js';
 
 export async function renderSettings() {
@@ -286,7 +286,6 @@ export async function renderSettings() {
   const synthesisMaxInput = el('input', {
     type: 'number',
     min: '1',
-    max: String(AppConfig.SYNTHESIS_MAX_ARTICLES_LIMIT),
     step: '1',
     value: String(draft.synthesisMaxArticles),
     style: 'width:6em',
@@ -300,7 +299,7 @@ export async function renderSettings() {
   const synthesisMaxField = el('div', { class: 'field' }, [
     labelRow(
       el('label', { text: 'Maximaal aantal artikelen in een signalering' }),
-      `Zijn er bij een scan meer relevante publicaties, dan krijgt de signalering de hoogst scorende mee (1–${AppConfig.SYNTHESIS_MAX_ARTICLES_LIMIT}, standaard ${DefaultSettings.synthesisMaxArticles}). De overige blijven als relevant in het scanresultaat staan. Minder artikelen geeft een kortere signalering en een kleinere prompt.`,
+      `Zijn er bij een scan meer relevante publicaties, dan krijgt de signalering de hoogst scorende mee (standaard ${DefaultSettings.synthesisMaxArticles}, geen bovengrens). De overige blijven als relevant in het scanresultaat staan. Minder artikelen geeft een kortere signalering en een kleinere prompt; meer artikelen kost meer tokens en kan het contextvenster van het model overschrijden.`,
     ),
     el('div', { class: 'row' }, [synthesisMaxInput, el('span', { text: 'artikelen' })]),
   ]);

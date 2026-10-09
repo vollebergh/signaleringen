@@ -167,9 +167,6 @@ export const AppConfig = {
   SCAN_CONFIRM_THRESHOLD: 200,
   SCAN_CONFIRM_TIMEOUT_MS: 4 * 60_000,
 
-  /** Bovengrens voor het invulveld "maximaal aantal artikelen in de synthese". */
-  SYNTHESIS_MAX_ARTICLES_LIMIT: 200,
-
   /**
    * Periodieke scan. Eén alarm tikt elk kwartier en kijkt wélke profielen aan
    * de beurt zijn; per profiel een eigen alarm zetten zou bij veel profielen
