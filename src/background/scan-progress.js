@@ -17,7 +17,7 @@ import { log } from '../core/logger.js';
 const PREFIX = 'scanProgress:';
 
 /** Fasen waarin een scan klaar is; alle andere betekenen "loopt". */
-const FINAL_PHASES = new Set(['idle', 'done', 'error', 'interrupted']);
+const FINAL_PHASES = new Set(['idle', 'done', 'error', 'interrupted', 'cancelled']);
 
 export const INTERRUPTED_MESSAGE =
   'De scan is afgebroken: de achtergrondservice van de extensie stopte onderweg. ' +

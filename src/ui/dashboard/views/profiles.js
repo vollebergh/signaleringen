@@ -4,7 +4,7 @@
  */
 
 import { Msg, send } from '../../../core/messages.js';
-import { el, clear, formatDateTime, progressLabel, explainScanFailure } from '../../shared/dom.js';
+import { el, clear, formatDateTime, progressLabel, showProgress, explainScanFailure } from '../../shared/dom.js';
 
 export async function renderProfileList() {
   const profiles = await send(Msg.LIST_PROFILES);
@@ -176,6 +176,8 @@ function profileCard(profile) {
       // Loopt er al een scan, of is de vorige afgebroken (B-46)?
       if (scanState.isScanning) {
         runScan(profile.id, scanButton, status, progressLabel(scanState, { withSource: true }) ?? undefined);
+        // Wacht de scan op "doorgaan?" (B-45), dan de vraag opnieuw tonen.
+        if (scanState.phase === 'confirm') showProgress(status, { ...scanState, profileId: profile.id });
         return;
       }
       if (scanState.phase === 'interrupted') {
@@ -252,10 +254,7 @@ async function runScan(profileId, button, status, initialLabel = 'Scan gestartâ€
 
   const onProgress = (message) => {
     if (message?.type !== Msg.SCAN_PROGRESS || message.payload.profileId !== profileId) return;
-    const label = progressLabel(message.payload, { withSource: true });
-    if (!label) return;
-    clear(status);
-    status.append(el('span', { class: 'spinner' }), el('span', { text: ` ${label}` }));
+    showProgress(status, message.payload, { withSource: true });
   };
 
   chrome.runtime.onMessage.addListener(onProgress);
@@ -279,7 +278,7 @@ async function runScan(profileId, button, status, initialLabel = 'Scan gestartâ€
       showInterrupted(profileId, button, status, message);
     } else {
       clear(status);
-      status.classList.add('error');
+      status.classList.toggle('error', !err.cancelled);
       status.textContent = message;
     }
   } finally {

@@ -17,11 +17,12 @@ import {
   filterPublications,
   isPrefilterActive,
   prefilterPublications,
+  selectForSynthesis,
   synthesizeProfile,
 } from '../network/llm-client.js';
 import { getSettings, isConfigured, missingConfigMessage, withApiKey } from '../data/settings-repository.js';
 import { getProfile } from '../data/profile-repository.js';
-import { normalizeLookbackDays } from '../core/models.js';
+import { normalizeLookbackDays, normalizeSynthesisMaxArticles } from '../core/models.js';
 import { saveScan, saveSynthesis, pruneOldScans } from '../data/scan-repository.js';
 import { markUnread } from '../data/unread-repository.js';
 import {
@@ -49,6 +50,48 @@ export function isScanning(profileId) {
   return running.has(profileId);
 }
 
+/**
+ * Scans die wachten op "doorgaan?" (B-45), per profiel-id: de functie die het
+ * antwoord doorgeeft. Net als `running` in geheugen; sterft de worker, dan
+ * meldt B-46 de scan als afgebroken.
+ */
+const awaitingConfirmation = new Map();
+
+/** Antwoord van de gebruiker op de vraag of een grote scan door mag. */
+export function confirmScan(profileId, proceed) {
+  const answer = awaitingConfirmation.get(profileId);
+  if (!answer) return false;
+  answer(Boolean(proceed));
+  return true;
+}
+
+/**
+ * Pauzeert de scan tot de gebruiker kiest. De vraag gaat via de voortgang naar
+ * elk open UI-vlak; wie als eerste antwoordt, beslist. Geen antwoord binnen de
+ * time-out telt als annuleren.
+ */
+function askToProceed(profileId, count) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => finish(false), AppConfig.SCAN_CONFIRM_TIMEOUT_MS);
+    function finish(proceed) {
+      clearTimeout(timer);
+      awaitingConfirmation.delete(profileId);
+      resolve(proceed);
+    }
+    awaitingConfirmation.set(profileId, finish);
+    setProgress(profileId, { phase: 'confirm', count, threshold: AppConfig.SCAN_CONFIRM_THRESHOLD });
+  });
+}
+
+/** Fout voor een scan die de gebruiker niet door liet gaan. */
+function cancelledError(profileId, count) {
+  const message = `Scan gestopt: ${count} publicaties niet beoordeeld. Ze komen bij een volgende scan opnieuw langs.`;
+  setProgress(profileId, { phase: 'cancelled', message });
+  const err = new Error(message);
+  err.cancelled = true;
+  return err;
+}
+
 // Bij het laden van de worker: een scan die volgens de sessieopslag nog liep,
 // is met de vorige worker meegestorven (B-46).
 recoverInterruptedScans(isScanning).catch((err) => log.warn('Afgebroken scans nalopen mislukt', err));
@@ -58,7 +101,8 @@ recoverInterruptedScans(isScanning).catch((err) => log.warn('Afgebroken scans na
  * @param {string} profileId
  * @param {{ sourceIds?: string[], automatic?: boolean }} [options]
  *   `sourceIds` beperkt de scan tot deze bronnen; `automatic` (de planner)
- *   zet een nieuwe signalering op ongelezen (B-54)
+ *   zet een nieuwe signalering op ongelezen (B-54) en vraagt bij een grote
+ *   scan niet om bevestiging (B-45)
  * @returns {Promise<{scanId: string, relevantCount: number, newCount: number}>}
  */
 export function runScan(profileId, options = {}) {
@@ -212,6 +256,15 @@ async function executeScan(profileId, options) {
       return { scanId, relevantCount: 0, newCount: 0, totalFetched: fetched.length };
     }
 
+    // ── 1a. Grote scan? Eerst vragen (B-45) ───────────────────────────────
+    // Na het ophalen, want pas dan is het aantal bekend, en vóór alles wat
+    // tokens kost. Annuleren legt niets vast als gezien, dus er gaat niets
+    // verloren.
+    if (!options.automatic && toEvaluate.length > AppConfig.SCAN_CONFIRM_THRESHOLD) {
+      const proceed = await askToProceed(profileId, toEvaluate.length);
+      if (!proceed) throw cancelledError(profileId, toEvaluate.length);
+    }
+
     // ── 1b. Volledige tekst bij publicaties zonder fragment (B-60) ────────
     // Alleen voor wat beoordeeld wordt. Zonder toestemming voor de host gaat
     // de scan gewoon door; het scanresultaat biedt dan een knop aan.
@@ -357,9 +410,15 @@ async function executeScan(profileId, options) {
     // Bewust ná het opslaan van de scan: mislukt de synthese, dan blijven de
     // beoordeelde publicaties gewoon staan.
     if (relevant.length > 0) {
-      setProgress(profileId, { phase: 'synthesizing', count: relevant.length });
+      // Alleen de hoogst scorende gaan mee (B-45); de rest blijft relevant
+      // in het scanresultaat staan, maar telt niet als verwerkt.
+      const forSynthesis = selectForSynthesis(
+        relevant,
+        normalizeSynthesisMaxArticles(settings.synthesisMaxArticles),
+      );
+      setProgress(profileId, { phase: 'synthesizing', count: forSynthesis.length });
       try {
-        const synthesis = await synthesizeProfile(profile, relevant, settings);
+        const synthesis = await synthesizeProfile(profile, forSynthesis, settings);
         const createdAt = Date.now();
         await saveSynthesis({
           scanId,
@@ -368,6 +427,7 @@ async function executeScan(profileId, options) {
           text: synthesis.text,
           sources: synthesis.sources,
           warnings: synthesis.warnings,
+          selection: { used: forSynthesis.length, relevant: relevant.length },
         });
         if (options.automatic && synthesis.text) {
           await markUnread(profileId, scanId, createdAt);
@@ -378,7 +438,7 @@ async function executeScan(profileId, options) {
         await markSynthesised(
           profileId,
           scanId,
-          relevant.map((r) => r.dedupeKey),
+          forSynthesis.map((r) => r.dedupeKey),
         );
       } catch (err) {
         log.error('Synthese mislukt, scanresultaten blijven bewaard', err);
@@ -412,6 +472,10 @@ async function executeScan(profileId, options) {
       totalFetched: fetched.length,
     };
   } catch (err) {
+    if (err.cancelled) {
+      log.info(`Scan '${profile.name}' gestopt door de gebruiker`);
+      throw err;
+    }
     log.error(`Scan mislukt voor '${profile.name}'`, err);
     setProgress(profileId, { phase: 'error', message: err.message ?? String(err) });
     throw err;

@@ -79,6 +79,53 @@ export function progressLabel(p, { withSource = false } = {}) {
 }
 
 /**
+ * Vraag bij een grote scan (B-45): doorgaan of stoppen. De scan in de worker
+ * wacht op het antwoord; elk open UI-vlak toont dezelfde vraag.
+ */
+export function confirmScanPrompt(p) {
+  const status = el('span', { class: 'muted' });
+  const answer = async (proceed, button) => {
+    button.parentElement.querySelectorAll('button').forEach((b) => {
+      b.disabled = true;
+    });
+    status.textContent = proceed ? ' Doorgaan…' : ' Stoppen…';
+    try {
+      const accepted = await send(Msg.CONFIRM_SCAN, { profileId: p.profileId, proceed });
+      if (!accepted) status.textContent = ' De scan wacht niet meer op een antwoord.';
+    } catch (err) {
+      status.textContent = ` ${err.message}`;
+    }
+  };
+  return el('div', { class: 'confirm-scan' }, [
+    el('p', {
+      text: `Er staan ${p.count} publicaties klaar om te beoordelen, meer dan ${p.threshold}. Dat kost meer tokens dan gebruikelijk. Doorgaan?`,
+    }),
+    el('div', { class: 'actions' }, [
+      el('button', { class: 'primary', text: 'Doorgaan', onclick: (e) => answer(true, e.currentTarget) }),
+      el('button', { text: 'Stoppen', onclick: (e) => answer(false, e.currentTarget) }),
+      status,
+    ]),
+  ]);
+}
+
+/**
+ * Toont de scanvoortgang in `container`: de vraag bij een grote scan, anders
+ * een spinner met tekst. Geeft false als er niets te tonen is.
+ */
+export function showProgress(container, p, options) {
+  if (p?.phase === 'confirm') {
+    clear(container);
+    container.append(confirmScanPrompt(p));
+    return true;
+  }
+  const label = progressLabel(p, options);
+  if (!label) return false;
+  clear(container);
+  container.append(el('span', { class: 'spinner' }), el('span', { text: ` ${label}` }));
+  return true;
+}
+
+/**
  * Vraagt de scanstatus op nadat START_SCAN zonder antwoord bleef omdat de
  * worker stopte. Het verzoek wekt de worker, die de scan dan als afgebroken
  * markeert (B-46). Geeft de foutmelding die de UI moet tonen.

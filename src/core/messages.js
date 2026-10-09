@@ -24,6 +24,8 @@ export const Msg = Object.freeze({
   GET_SCAN_RESULTS: 'scan/results',
   TOGGLE_BOOKMARK: 'scan/toggleBookmark',
   MARK_AS_READ: 'scan/markAsRead',
+  // Antwoord op "doorgaan?" bij een grote scan (B-45)
+  CONFIRM_SCAN: 'scan/confirm',
   LIST_BOOKMARKS: 'scan/bookmarks',
 
   // Syntheses
@@ -72,7 +74,9 @@ export async function send(type, payload = {}) {
     throw new Error('Geen antwoord van de achtergrondservice');
   }
   if (response.ok === false) {
-    throw new Error(response.error ?? 'Onbekende fout');
+    const error = new Error(response.error ?? 'Onbekende fout');
+    if (response.cancelled) error.cancelled = true;
+    throw error;
   }
   return response.data;
 }

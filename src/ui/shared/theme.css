@@ -365,3 +365,21 @@ label {
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
+
+/* Vraag bij een grote scan (B-45), in popup, side panel en dashboard. */
+.confirm-scan {
+  display: block;
+  width: 100%;
+}
+
+.confirm-scan p {
+  margin: 0 0 8px;
+  color: var(--text);
+}
+
+.confirm-scan .actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}

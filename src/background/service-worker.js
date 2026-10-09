@@ -40,7 +40,7 @@ import { exportProfiles, exportFilename, previewImport, importProfiles } from '.
 import { fetchPublications } from '../network/feed-fetcher.js';
 import { testConnection, testPrefilter } from '../network/llm-client.js';
 
-import { runScan, getProgress, isScanning } from './scan-runner.js';
+import { runScan, getProgress, isScanning, confirmScan } from './scan-runner.js';
 import { applySchedule, runDueScans, ALARM_NAME } from './scheduler.js';
 import { parseOpml } from './opml.js';
 import { updateBadge, getUnreadProfileIds } from './badge.js';
@@ -185,6 +185,8 @@ const handlers = {
     return scan ? scans.getScanResults(scan.id) : null;
   },
 
+  [Msg.CONFIRM_SCAN]: async ({ profileId, proceed }) => confirmScan(profileId, proceed),
+
   [Msg.GET_SCAN_RESULTS]: ({ scanId }) => scans.getScanResults(scanId),
 
   [Msg.TOGGLE_BOOKMARK]: ({ publicationId, bookmarked }) =>
@@ -256,8 +258,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   handler(message.payload ?? {})
     .then((data) => sendResponse({ ok: true, data }))
     .catch((err) => {
-      log.error(`Bericht '${message.type}' mislukt`, err);
-      sendResponse({ ok: false, error: err?.message ?? String(err) });
+      if (!err?.cancelled) log.error(`Bericht '${message.type}' mislukt`, err);
+      // `cancelled`: de gebruiker stopte een grote scan (B-45) — geen storing.
+      sendResponse({ ok: false, error: err?.message ?? String(err), cancelled: Boolean(err?.cancelled) });
     });
 
   // true houdt het antwoordkanaal open voor de asynchrone afhandeling.

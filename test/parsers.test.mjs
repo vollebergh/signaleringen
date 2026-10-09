@@ -809,3 +809,26 @@ test('parseVaultSecret: nieuwe vault met beide keys, oude vault met alleen de ka
   assert.deepEqual(parseVaultSecret('sk-or-v1-oud'), { directApiKey: 'sk-or-v1-oud', prefilterApiKey: '' });
   assert.deepEqual(parseVaultSecret('"string"'), { directApiKey: '"string"', prefilterApiKey: '' });
 });
+
+// ── B-45: synthese begrenzen ────────────────────────────────────────────────
+
+import { selectForSynthesis } from '../src/network/llm-client.js';
+import { normalizeSynthesisMaxArticles } from '../src/core/models.js';
+
+test('selectForSynthesis: hoogste score eerst, bij gelijke score de nieuwste, begrensd', () => {
+  const pub = (id, score, date) => ({ id, score, publication: { publishedDate: date } });
+  const relevant = [pub('a', 70, 1), pub('b', 95, 1), pub('c', 70, 5), pub('d', null, 9), pub('e', 80, 2)];
+  assert.deepEqual(selectForSynthesis(relevant, 3).map((r) => r.id), ['b', 'e', 'c']);
+  assert.deepEqual(selectForSynthesis(relevant, 10).map((r) => r.id), ['b', 'e', 'c', 'a', 'd']);
+  assert.equal(relevant[0].id, 'a', 'de invoer blijft ongemoeid');
+});
+
+test('normalizeSynthesisMaxArticles: standaard 25, hele getallen, begrensd', () => {
+  assert.equal(DefaultSettings.synthesisMaxArticles, 25);
+  assert.equal(normalizeSynthesisMaxArticles(undefined), 25);
+  assert.equal(normalizeSynthesisMaxArticles(''), 25);
+  assert.equal(normalizeSynthesisMaxArticles('0'), 25);
+  assert.equal(normalizeSynthesisMaxArticles('12'), 12);
+  assert.equal(normalizeSynthesisMaxArticles(7.6), 8);
+  assert.equal(normalizeSynthesisMaxArticles(5000), AppConfig.SYNTHESIS_MAX_ARTICLES_LIMIT);
+});

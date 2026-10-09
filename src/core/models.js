@@ -6,7 +6,7 @@
  * publicaties tot één signalering over het profielonderwerp bundelt.
  */
 
-import { AppConfig } from './config.js';
+import { AppConfig, DefaultSettings } from './config.js';
 
 export const SourceType = Object.freeze({
   RSS: 'RSS',
@@ -47,6 +47,16 @@ export function normalizeLookbackDays(value) {
   const days = Math.round(Number(value));
   if (!Number.isFinite(days) || days < 1) return AppConfig.DEFAULT_LOOKBACK_DAYS;
   return Math.min(days, AppConfig.MAX_LOOKBACK_DAYS);
+}
+
+/**
+ * Maximaal aantal artikelen in de synthese (B-45): een heel getal van 1 tot de
+ * bovengrens; iets anders wordt de standaard.
+ */
+export function normalizeSynthesisMaxArticles(value) {
+  const count = Math.round(Number(value));
+  if (!Number.isFinite(count) || count < 1) return DefaultSettings.synthesisMaxArticles;
+  return Math.min(count, AppConfig.SYNTHESIS_MAX_ARTICLES_LIMIT);
 }
 
 /** @returns {Profile} */

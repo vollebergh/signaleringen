@@ -168,6 +168,8 @@ export async function getSynthesesForProfile(profileId) {
       scanDate: scan.scanDate,
       text: synthesis.text,
       sources: synthesis.sources ?? [],
+      warnings: synthesis.warnings ?? [],
+      selection: synthesis.selection ?? null,
       relevantCount: scan.relevantCount ?? 0,
       totalFetched: scan.totalFetched ?? 0,
       newCount: scan.newCount ?? 0,

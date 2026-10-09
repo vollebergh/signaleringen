@@ -155,6 +155,22 @@ export const AppConfig = {
   SCANS_TO_KEEP_PER_PROFILE: 5,
 
   /**
+   * Kosten per scan (B-45). Geen harde grens: de gebruiker gaat over zijn
+   * eigen tokenbudget en de omvang van zijn profielen. Staan er bij een
+   * handmatige scan meer publicaties klaar om te beoordelen dan deze drempel,
+   * dan vraagt de extensie eerst of je door wilt. De planner vraagt niets:
+   * wie de automaat aanzet, heeft al gekozen.
+   *
+   * Blijft een antwoord uit, dan stopt de scan na de time-out. Ruim onder de
+   * vijf minuten waarna Edge een onbeantwoord bericht aan de worker afbreekt.
+   */
+  SCAN_CONFIRM_THRESHOLD: 200,
+  SCAN_CONFIRM_TIMEOUT_MS: 4 * 60_000,
+
+  /** Bovengrens voor het invulveld "maximaal aantal artikelen in de synthese". */
+  SYNTHESIS_MAX_ARTICLES_LIMIT: 200,
+
+  /**
    * Periodieke scan. Eén alarm tikt elk kwartier en kijkt wélke profielen aan
    * de beurt zijn; per profiel een eigen alarm zetten zou bij veel profielen
    * onnodig veel wekkers opleveren voor werk dat toch serieel gebeurt.
@@ -222,6 +238,13 @@ export const DefaultSettings = {
   fallbackProviderRouting: 'decart/fp4',
 
   theme: 'system', // 'system' | 'light' | 'dark'
+
+  /**
+   * Hoeveel relevante publicaties de synthese hooguit meekrijgt (B-45): de
+   * hoogst scorende. Houdt de signalering leesbaar en de prompt begrensd; de
+   * rest blijft gewoon als relevant in het scanresultaat staan.
+   */
+  synthesisMaxArticles: 25,
 
   /**
    * Hoofdschakelaar voor automatisch synthetiseren. Staat uit bij een verse

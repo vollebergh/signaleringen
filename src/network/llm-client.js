@@ -684,6 +684,20 @@ Richtlijnen:
 Antwoord in platte tekst met korte alinea's. Gebruik geen markdown-koppen.`;
 
 /**
+ * Kiest de publicaties voor de synthese (B-45): de hoogst scorende, bij
+ * gelijke score de nieuwste. Zonder score (oudere scans) telt alleen de datum.
+ */
+export function selectForSynthesis(relevant, max) {
+  return [...relevant]
+    .sort((a, b) => {
+      const byScore = (b.score ?? -1) - (a.score ?? -1);
+      if (byScore !== 0) return byScore;
+      return (b.publication.publishedDate ?? 0) - (a.publication.publishedDate ?? 0);
+    })
+    .slice(0, max);
+}
+
+/**
  * Bundelt de relevante publicaties van één profiel tot één signalering.
  *
  * @param {object} profile het profiel, inclusief eventuele `synthesisPrompt`

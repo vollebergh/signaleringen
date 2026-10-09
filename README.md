@@ -182,6 +182,16 @@ automaat zet een teller op het extensiepictogram en een label *nieuw* in de
 popup. Beide verdwijnen zodra je de signalering in het dashboard of het side
 panel bekijkt.
 
+Een scan kent geen maximum aantal publicaties: je gaat zelf over je
+tokenbudget. Staan er bij een handmatige scan meer dan 200 publicaties klaar om
+te beoordelen, dan vraagt de extensie eerst of je door wilt. Stoppen kost niets
+en verliest niets: die publicaties komen bij de volgende scan terug. De
+automatische planner vraagt dit niet.
+
+Een signalering bundelt hooguit 25 artikelen, de hoogst scorende (instelbaar bij
+Instellingen → Signalering). De overige blijven als relevant in het
+scanresultaat staan.
+
 ## Signaleringen teruglezen
 
 Per profiel is er een knop **Lees signalering** die direct de recentste
@@ -295,7 +305,7 @@ privacybeleid en de datadeclaratie hoort te staan.
 ## Tests
 
 ```bash
-node --test test/parsers.test.mjs
+node --test test/*.test.mjs
 ```
 
 Dekt de XML-pull-parser, feed-mapping (RSS 2.0 en Atom), datumherkenning,

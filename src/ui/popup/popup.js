@@ -5,7 +5,7 @@
  */
 
 import { Msg, send } from '../../core/messages.js';
-import { $, el, clear, applyTheme, formatDateTime, showError, progressLabel, explainScanFailure } from '../shared/dom.js';
+import { $, el, clear, applyTheme, formatDateTime, showError, progressLabel, showProgress, explainScanFailure } from '../shared/dom.js';
 
 const content = $('#content');
 
@@ -187,6 +187,8 @@ async function profileCard(profile, isUnread) {
     const scanButton = card.querySelector('button.primary[data-profile-id]');
     if (scanState.isScanning) {
       startScan(profile.id, scanButton, progressLabel(scanState) ?? undefined); // haakt aan bij de lopende scan
+      // Wacht de scan op "doorgaan?" (B-45), dan de vraag opnieuw tonen.
+      if (scanState.phase === 'confirm') showProgress(status, { ...scanState, profileId: profile.id });
     } else if (scanState.phase === 'interrupted') {
       showInterrupted(profile.id, status, scanState.message, scanButton);
     }
@@ -250,7 +252,7 @@ async function startScan(profileId, button, initialLabel = 'Scan gestart…') {
         showInterrupted(profileId, status, message, button);
       } else {
         clear(status);
-        status.classList.add('error');
+        status.classList.toggle('error', !err.cancelled);
         status.textContent = message;
       }
     }
@@ -266,13 +268,7 @@ chrome.runtime.onMessage.addListener((message) => {
   const status = statusNodes.get(profileId);
   if (!status) return;
 
-  const label = progressLabel(message.payload);
-
-  if (label) {
-    clear(status);
-    status.classList.remove('error');
-    status.append(el('span', { class: 'spinner' }), el('span', { text: ` ${label}` }));
-  }
+  if (showProgress(status, message.payload)) status.classList.remove('error');
 });
 
 init();

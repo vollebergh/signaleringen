@@ -5,7 +5,7 @@
  */
 
 import { Msg, send } from '../../core/messages.js';
-import { $, el, clear, sourceReferences, applyTheme, formatDate, formatDateTime, openUrl, showError, progressLabel, explainScanFailure } from '../shared/dom.js';
+import { $, el, clear, sourceReferences, applyTheme, formatDate, formatDateTime, openUrl, showError, progressLabel, showProgress, explainScanFailure } from '../shared/dom.js';
 
 const content = $('#content');
 const profileSelect = $('#profile-select');
@@ -73,6 +73,10 @@ async function loadLatest() {
     // melden boven de laatste signalering (B-46).
     if (scanState.isScanning) {
       scanNow(progressLabel(scanState) ?? undefined);
+      // Wacht de scan op "doorgaan?" (B-45), dan de vraag opnieuw tonen.
+      if (scanState.phase === 'confirm') {
+        showProgress(content.firstChild, { ...scanState, profileId });
+      }
       return;
     }
     if (scanState.phase === 'interrupted') {
@@ -104,6 +108,10 @@ async function loadLatest() {
     if (latest.synthesis?.text) {
       for (const warning of latest.synthesis.warnings ?? []) {
         content.append(el('p', { class: 'error', text: `⚠ ${warning}` }));
+      }
+      const { selection } = latest.synthesis;
+      if (selection && selection.used < selection.relevant) {
+        content.append(el('p', { class: 'muted', text: `Gebaseerd op de ${selection.used} hoogst scorende van ${selection.relevant} relevante publicaties.` }));
       }
       content.append(el('div', { class: 'synthesis', text: latest.synthesis.text }));
       send(Msg.MARK_SYNTHESIS_READ, { profileId, createdAt: latest.synthesis.createdAt }).catch(() => {});
@@ -174,6 +182,10 @@ async function scanNow(initialLabel = 'Scan gestart…') {
       // Toont de melding over de afgebroken scan met een knop om opnieuw te scannen.
       await explainScanFailure(profileId, err);
       await loadLatest();
+    } else if (err.cancelled) {
+      // Gestopt bij de vraag (B-45): melding boven de vorige signalering.
+      await loadLatest();
+      content.prepend(el('p', { class: 'muted', text: err.message }));
     } else {
       showError(content, err);
     }
@@ -186,13 +198,10 @@ chrome.runtime.onMessage.addListener((message) => {
   if (message?.type !== Msg.SCAN_PROGRESS) return;
   if (message.payload.profileId !== profileSelect.value) return;
 
-  const label = progressLabel(message.payload);
-  if (!label) return;
-
+  const row = el('p', { class: 'row' });
+  if (!showProgress(row, message.payload)) return;
   clear(content);
-  content.append(
-    el('p', { class: 'row' }, [el('span', { class: 'spinner' }), el('span', { text: ` ${label}` })]),
-  );
+  content.append(row);
 });
 
 init();

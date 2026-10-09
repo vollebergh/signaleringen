@@ -10,6 +10,8 @@ import { Msg, send } from '../../../core/messages.js';
 import { el, clear, labelRow } from '../../shared/dom.js';
 import { originPattern } from '../../../background/permissions.js';
 import { QUANTIZATIONS, validateRouting } from '../../../network/llm-client.js';
+import { AppConfig, DefaultSettings } from '../../../core/config.js';
+import { normalizeSynthesisMaxArticles } from '../../../core/models.js';
 
 export async function renderSettings() {
   const [settings, vault] = await Promise.all([send(Msg.GET_SETTINGS), send(Msg.VAULT_STATUS)]);
@@ -279,6 +281,30 @@ export async function renderSettings() {
   ]);
   refreshAutoStatus();
 
+  // ── Synthese (B-45) ───────────────────────────────────────────────────────
+  draft.synthesisMaxArticles = normalizeSynthesisMaxArticles(draft.synthesisMaxArticles);
+  const synthesisMaxInput = el('input', {
+    type: 'number',
+    min: '1',
+    max: String(AppConfig.SYNTHESIS_MAX_ARTICLES_LIMIT),
+    step: '1',
+    value: String(draft.synthesisMaxArticles),
+    style: 'width:6em',
+  });
+  synthesisMaxInput.addEventListener('input', () => {
+    draft.synthesisMaxArticles = normalizeSynthesisMaxArticles(synthesisMaxInput.value);
+  });
+  synthesisMaxInput.addEventListener('change', () => {
+    synthesisMaxInput.value = String(draft.synthesisMaxArticles);
+  });
+  const synthesisMaxField = el('div', { class: 'field' }, [
+    labelRow(
+      el('label', { text: 'Maximaal aantal artikelen in een signalering' }),
+      `Zijn er bij een scan meer relevante publicaties, dan krijgt de signalering de hoogst scorende mee (1–${AppConfig.SYNTHESIS_MAX_ARTICLES_LIMIT}, standaard ${DefaultSettings.synthesisMaxArticles}). De overige blijven als relevant in het scanresultaat staan. Minder artikelen geeft een kortere signalering en een kleinere prompt.`,
+    ),
+    el('div', { class: 'row' }, [synthesisMaxInput, el('span', { text: 'artikelen' })]),
+  ]);
+
   // ── Thema ─────────────────────────────────────────────────────────────────
   const themeSelect = el('select', {}, [
     el('option', { value: 'system', text: 'Systeem' }),
@@ -312,6 +338,9 @@ export async function renderSettings() {
 
     el('h3', { class: 'section-title', text: 'Voorfilter' }),
     prefilterField,
+
+    el('h3', { class: 'section-title', text: 'Signalering' }),
+    synthesisMaxField,
 
     el('h3', { class: 'section-title', text: 'Weergave' }),
     field('Thema', themeSelect),
