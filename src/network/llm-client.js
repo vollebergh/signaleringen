@@ -12,8 +12,14 @@
  */
 
 import { AppConfig } from '../core/config.js';
+import { isLocalBaseUrl } from '../core/models.js';
 import { log } from '../core/logger.js';
 import { fetchWithTimeout, isTransientStatus } from './http.js';
+
+/** Praat de extensie rechtstreeks met een lokaal model? (B-67) */
+function isLocal(settings) {
+  return settings?.transport !== 'proxy' && isLocalBaseUrl(settings?.directBaseUrl);
+}
 
 function usesPreset(model) {
   return typeof model === 'string' && model.includes('@preset/');
@@ -31,13 +37,11 @@ function resolveEndpoint(settings) {
   }
 
   const base = settings.directBaseUrl.trim().replace(/\/+$/, '');
-  return {
-    url: `${base}/chat/completions`,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${settings.directApiKey.trim()}`,
-    },
-  };
+  const headers = { 'Content-Type': 'application/json' };
+  // Een lokaal model draait zonder key (B-67); dan geen lege Bearer meesturen.
+  const key = settings.directApiKey?.trim();
+  if (key) headers.Authorization = `Bearer ${key}`;
+  return { url: `${base}/chat/completions`, headers };
 }
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -139,6 +143,9 @@ function providerRouting(routing) {
  * staat de uitwijkroute. Geëxporteerd voor de tests.
  */
 export function routesFor(settings) {
+  // Lokaal model (B-67): geen OpenRouter-routing en geen uitwijkroute — die
+  // wijst naar een model dat lokaal niet bestaat.
+  if (isLocal(settings)) return [{ model: settings.model, provider: null }];
   const primary = {
     model: settings.model,
     provider: usesPreset(settings.model) ? null : providerRouting(settings.providerRouting),
@@ -206,7 +213,8 @@ async function completeOnce(settings, route, { system, user, maxTokens, temperat
   }
 
   // Eén veld voor de redeneerinspanning; 'none' zet het uit. Zie AppConfig.
-  body.reasoning = { effort: AppConfig.LLM_REASONING_EFFORT };
+  // Een OpenRouter-veld; een lokale server krijgt het niet (B-67).
+  if (!isLocal(settings)) body.reasoning = { effort: AppConfig.LLM_REASONING_EFFORT };
 
   const response = await fetchWithTimeout(
     url,
@@ -393,7 +401,7 @@ export async function filterPublications(publications, userQuery, settings, onBa
   if (publications.length === 0) return [];
 
   const results = [];
-  const batchSize = AppConfig.LLM_BATCH_SIZE;
+  const batchSize = isLocal(settings) ? AppConfig.LOCAL_LLM_BATCH_SIZE : AppConfig.LLM_BATCH_SIZE;
 
   for (let start = 0; start < publications.length; start += batchSize) {
     const batch = publications.slice(start, start + batchSize);

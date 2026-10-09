@@ -103,6 +103,11 @@ export const AppConfig = {
 
   // Batching — voorkomt afgekapte responses bij grote feeds (zie B-20)
   LLM_BATCH_SIZE: 40,
+  /**
+   * Kleinere groepen voor een lokaal model (B-67): het contextvenster is daar
+   * vaak klein en een groep van 40 duurt op een CPU minuten.
+   */
+  LOCAL_LLM_BATCH_SIZE: 10,
 
   /**
    * Voorfilter met Jev (B-58, besluit B-D10). Optioneel, standaard uit

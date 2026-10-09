@@ -832,3 +832,36 @@ test('normalizeSynthesisMaxArticles: standaard 25, hele getallen, geen bovengren
   assert.equal(normalizeSynthesisMaxArticles(7.6), 8);
   assert.equal(normalizeSynthesisMaxArticles(5000), 5000);
 });
+
+// ── B-67: lokale modellen ───────────────────────────────────────────────────
+
+import { isLocalBaseUrl } from '../src/core/models.js';
+
+test('isLocalBaseUrl herkent localhost, privé-adressen en .local', () => {
+  for (const url of [
+    'http://localhost:11434/v1',
+    'http://127.0.0.1:1234/v1',
+    'http://[::1]:8080/v1',
+    'http://192.168.1.20:11434/v1',
+    'http://10.0.0.5/v1',
+    'http://172.20.0.2:8000/v1',
+    'http://mini.local:11434/v1',
+  ]) {
+    assert.equal(isLocalBaseUrl(url), true, url);
+  }
+  for (const url of ['https://openrouter.ai/api/v1', 'http://172.32.0.1/v1', 'http://8.8.8.8/v1', '', 'onzin', undefined]) {
+    assert.equal(isLocalBaseUrl(url), false, String(url));
+  }
+});
+
+test('routesFor: lokaal model zonder routing en zonder uitwijkroute', () => {
+  const routes = routesFor({
+    transport: 'direct',
+    directBaseUrl: 'http://localhost:11434/v1',
+    model: 'qwen2.5:3b',
+    providerRouting: 'deepinfra',
+    fallbackEnabled: true,
+    fallbackModel: 'deepseek/deepseek-v4.1-flash',
+  });
+  assert.deepEqual(routes, [{ model: 'qwen2.5:3b', provider: null }]);
+});

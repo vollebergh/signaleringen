@@ -11,6 +11,7 @@
 import { DefaultSettings } from '../core/config.js';
 import { log } from '../core/logger.js';
 import { createVault, decryptVault, unlockVault } from '../core/vault.js';
+import { isLocalBaseUrl } from '../core/models.js';
 
 const KEY = 'settings';
 
@@ -160,7 +161,12 @@ export class VaultLockedError extends Error {
  */
 export async function withApiKey(settings) {
   // Alleen de vault openen als er een key nodig is die er niet leesbaar staat.
-  const needsDirect = settings.transport === 'direct' && !settings.directApiKey?.trim();
+  // Een lokaal model heeft geen key nodig (B-67): een vergrendelde vault
+  // houdt de scan dan niet tegen.
+  const needsDirect =
+    settings.transport === 'direct' &&
+    !settings.directApiKey?.trim() &&
+    !isLocalBaseUrl(settings.directBaseUrl);
   const needsPrefilter = Boolean(settings.jevPrefilterEnabled) && !settings.prefilterApiKey?.trim();
   if (!needsDirect && !needsPrefilter) return settings;
   const vault = await readVault();
@@ -189,6 +195,7 @@ export async function isConfigured(settings) {
   const s = settings ?? (await getSettings());
   if (s.transport === 'proxy') return Boolean(s.proxyUrl?.trim());
   if (!s.directBaseUrl?.trim()) return false;
+  if (isLocalBaseUrl(s.directBaseUrl)) return true;
   return Boolean(s.directApiKey?.trim()) || Boolean(await readVault());
 }
 

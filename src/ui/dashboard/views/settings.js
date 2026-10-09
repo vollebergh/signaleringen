@@ -11,7 +11,7 @@ import { el, clear, labelRow } from '../../shared/dom.js';
 import { originPattern } from '../../../background/permissions.js';
 import { QUANTIZATIONS, validateRouting } from '../../../network/llm-client.js';
 import { DefaultSettings } from '../../../core/config.js';
-import { normalizeSynthesisMaxArticles } from '../../../core/models.js';
+import { normalizeSynthesisMaxArticles, isLocalBaseUrl } from '../../../core/models.js';
 
 export async function renderSettings() {
   const [settings, vault] = await Promise.all([send(Msg.GET_SETTINGS), send(Msg.VAULT_STATUS)]);
@@ -53,7 +53,11 @@ export async function renderSettings() {
     vault.exists
       ? null
       : field('API-key', directApiKey, 'Je persoonlijke OpenRouter-key uit de workspace signaleringen. Die staat op jouw naam en heeft een eigen uitgavenlimiet.'),
-    field('Base-URL', directBaseUrl, 'Bijv. https://openrouter.ai/api/v1'),
+    field(
+      'Base-URL',
+      directBaseUrl,
+      'Standaard https://openrouter.ai/api/v1. Een lokaal model kan ook, bijv. Ollama op http://localhost:11434/v1: vul bij Model de lokale modelnaam in, een API-key is dan niet nodig. Zie Uitleg.',
+    ),
     vaultSection(vault, draft),
   );
 
@@ -369,13 +373,22 @@ export async function renderSettings() {
     try {
       // De proxy is een host als elke andere: zonder toestemming blokkeert de
       // browser de fetch vanuit de service worker.
-      if (draft.transport === 'proxy' && draft.proxyUrl.trim()) {
-        const origin = originPattern(draft.proxyUrl);
+      // Zo ook een lokaal model (B-67): de server staat verzoeken van een
+      // extensie meestal alleen toe met toestemming voor die host.
+      const ownHost =
+        draft.transport === 'proxy'
+          ? draft.proxyUrl.trim()
+          : isLocalBaseUrl(draft.directBaseUrl) ? draft.directBaseUrl.trim() : '';
+      if (ownHost) {
+        const origin = originPattern(ownHost);
         if (origin && !(await chrome.permissions.contains({ origins: [origin] }))) {
           const granted = await chrome.permissions.request({ origins: [origin] });
           if (!granted) {
             status.className = 'error';
-            status.textContent = 'Zonder toestemming voor de proxy-host werkt de verbinding niet.';
+            status.textContent =
+              draft.transport === 'proxy'
+                ? 'Zonder toestemming voor de proxy-host werkt de verbinding niet.'
+                : 'Zonder toestemming voor het lokale adres werkt de verbinding niet.';
             button.disabled = false;
             return false;
           }

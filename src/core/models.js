@@ -117,6 +117,26 @@ export function validateSourceUrl(url) {
   return null;
 }
 
+/**
+ * Wijst de Base-URL naar een lokaal model (B-67)? Localhost, een privé-adres
+ * of een `.local`-naam. Zo'n server vraagt geen API-key en kent de
+ * OpenRouter-velden (provider-routing, uitwijkroute, redeneren) niet.
+ */
+export function isLocalBaseUrl(url) {
+  let host;
+  try {
+    host = new URL(String(url ?? '').trim()).hostname.replace(/^\[|\]$/g, '');
+  } catch {
+    return false;
+  }
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')) return true;
+  if (host === '::1') return true;
+  const octets = host.split('.').map(Number);
+  if (octets.length !== 4 || octets.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return false;
+  const [a, b] = octets;
+  return a === 127 || a === 10 || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31);
+}
+
 /** Dupliceert een profiel met nieuwe id's, inclusief bronnen. */
 export function duplicateProfile(profile) {
   return createProfile({

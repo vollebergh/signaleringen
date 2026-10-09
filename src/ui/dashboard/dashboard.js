@@ -72,7 +72,7 @@ async function route() {
 }
 
 function markActiveTab(tab) {
-  for (const button of $$('nav.tabs button')) {
+  for (const button of $$('nav.tabs button[data-route]')) {
     if (button.dataset.route === tab) button.setAttribute('aria-current', 'page');
     else button.removeAttribute('aria-current');
   }
@@ -80,7 +80,9 @@ function markActiveTab(tab) {
 
 for (const button of $$('nav.tabs button')) {
   button.addEventListener('click', () => {
-    location.hash = `#${button.dataset.route}`;
+    // Uitleg is geen eigen weergave maar de README op GitHub.
+    if (button.dataset.href) chrome.tabs.create({ url: button.dataset.href });
+    else location.hash = `#${button.dataset.route}`;
   });
 }
 

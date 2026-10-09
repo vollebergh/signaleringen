@@ -5,6 +5,7 @@
  */
 
 import { Msg, send } from '../../core/messages.js';
+import { isLocalBaseUrl } from '../../core/models.js';
 import { $, el, clear, applyTheme, formatDateTime, showError, progressLabel, showProgress, explainScanFailure } from '../shared/dom.js';
 
 const content = $('#content');
@@ -57,7 +58,7 @@ async function render() {
     const configured =
       settings.transport === 'proxy'
         ? Boolean(settings.proxyUrl?.trim())
-        : Boolean(settings.directApiKey?.trim()) || vault.exists;
+        : Boolean(settings.directApiKey?.trim()) || vault.exists || isLocalBaseUrl(settings.directBaseUrl);
 
     if (!configured) {
       content.append(
