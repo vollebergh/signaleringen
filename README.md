@@ -135,11 +135,19 @@ de beschrijving, vóór de voorfilter en de relevantiestap. Alleen voor wat
 beoordeeld wordt, 4 tegelijk, tot 100 per scan. Kamerstukken (`kst-`) en
 Kamervragen met antwoord (`ah-`) staan daar met de hele documenttekst; bijlagen
 (`blg-`) alleen als PDF, die slaat de extensie over. Geen treffer in de tekst:
-de beschrijving blijft zoals ze was. Zonder toestemming voor de host gaat de scan gewoon door
-en biedt het scanresultaat een knop *Toegang geven* aan. Gemeten op het
-additionaliteitsprofiel: 20 van 20 Kamerstukken en Kamervragen aangevuld in
-4 s; 17 daarvan bleken relevant, waar het model ze zonder tekst op 5–30 had
-gezet.
+de beschrijving blijft zoals ze was. Zonder toestemming voor de host gaat de
+scan gewoon door en biedt het scanresultaat een knop *Toegang geven* aan.
+
+- **Tokens:** het fragment is maximaal 300 tekens, even groot als een gewoon
+  fragment van de zoek-API. Gemeten op 151 publicaties: +1.400 prompttokens
+  per scan (+6,5%), $0,0026 → $0,0028. Een fragment van 700 tekens kostte
+  +16% en gaf hetzelfde resultaat.
+- **Opslag:** het document wordt met `cache: 'no-store'` opgehaald (de server
+  stuurt zelf ook `no-store`), alleen in het geheugen doorzocht en daarna
+  weggegooid. Alleen het fragment wordt bewaard, als deel van de beschrijving.
+- **Effect:** op het additionaliteitsprofiel 20 van 20 Kamerstukken en
+  Kamervragen aangevuld in 4 s; 17 daarvan bleken relevant, waar het model ze
+  zonder tekst op 5–30 had gezet.
 
 Tips voor een profiel over een beleidsdossier:
 

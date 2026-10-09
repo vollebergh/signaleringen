@@ -142,8 +142,14 @@ export const AppConfig = {
    */
   FULLTEXT_MAX_PER_SCAN: 100,
   FULLTEXT_CONCURRENCY: 4,
-  FULLTEXT_SNIPPET_CHARS: 300, // per kant van een treffer
-  FULLTEXT_MAX_CHARS: 700, // alle fragmenten samen
+  //
+  // Fragmentgrootte gelijk aan een gewoon fragment van de zoek-API (mediaan
+  // ± 250 tekens incl. organisatie). Gemeten 2026-10-09 op 151 publicaties:
+  // 300 tekens kost +1.400 prompttokens per scan (+6,5%, ± 70 per aangevulde
+  // publicatie), 700 tekens +3.400 (+16%) — en beide maken alle 20 aangevulde
+  // publicaties relevant. Meer tekst voegt dus niets toe.
+  FULLTEXT_SNIPPET_CHARS: 150, // per kant van een treffer
+  FULLTEXT_MAX_CHARS: 300, // alle fragmenten samen
 
   // Bewaartermijn
   SCANS_TO_KEEP_PER_PROFILE: 5,

@@ -265,7 +265,15 @@ export async function enrichWithFullText(publications, onProgress) {
   const worker = async () => {
     for (let pub = queue.shift(); pub; pub = queue.shift()) {
       try {
-        const response = await fetchWithTimeout(pub.fullTextUrl, { headers: { Accept: 'text/html' } }, AppConfig.FEED_TIMEOUT_MS);
+        // `no-store`: het document is alleen nodig voor het fragment en mag
+        // niet in de HTTP-cache van de browser blijven staan. De server zegt
+        // dat zelf ook (`cache-control: no-store`), maar daar leunen we niet
+        // op. De tekst zelf wordt nergens bewaard; alleen het fragment.
+        const response = await fetchWithTimeout(
+          pub.fullTextUrl,
+          { headers: { Accept: 'text/html' }, cache: 'no-store' },
+          AppConfig.FEED_TIMEOUT_MS,
+        );
         if (response.ok) {
           const snippet = snippetAround(extractBodyText(await response.text()), pub.fullTextTerms ?? []);
           if (snippet) {
