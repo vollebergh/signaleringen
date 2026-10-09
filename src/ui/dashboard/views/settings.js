@@ -56,40 +56,103 @@ export async function renderSettings() {
   );
 
   // ── Voorfilter (B-58) ─────────────────────────────────────────────────────
-  // Alleen in de route `direct`: de proxy kent alleen chat/completions, niet
-  // het decisions-endpoint van Jev. In de proxy-route uitgeschakeld tonen.
+  // Eigen verbinding: endpoint, key, model en routing, zodat een gebruiker in
+  // productie zijn eigen key en model kiest. Lege key: die van het taalmodel.
+  // Via een proxy staat die er niet, dan is een eigen key nodig.
   const prefilterCheckbox = el('input', { type: 'checkbox' });
   prefilterCheckbox.checked = Boolean(draft.jevPrefilterEnabled);
   prefilterCheckbox.style.width = 'auto';
   prefilterCheckbox.addEventListener('change', () => {
     draft.jevPrefilterEnabled = prefilterCheckbox.checked;
+    syncPrefilter();
   });
   const prefilterProxyHint = el('div', {
     class: 'hint error',
-    text: 'Niet beschikbaar via een proxy: die kent alleen chat/completions. Kies de route met een eigen API-key om de voorfilter te gebruiken.',
+    text: 'Via een proxy staat er geen key in de browser: vul hieronder een eigen key voor de voorfilter in, anders slaat de extensie de voorfilter over.',
   });
+
+  const prefilterEndpoint = input('url', draft.prefilterEndpoint, (v) => {
+    draft.prefilterEndpoint = v;
+  });
+  const prefilterApiKey = input('password', draft.prefilterApiKey, (v) => {
+    draft.prefilterApiKey = v;
+  });
+  prefilterApiKey.placeholder = 'leeg: dezelfde key als het taalmodel';
+  const prefilterModel = input('text', draft.prefilterModel, (v) => {
+    draft.prefilterModel = v;
+  });
+  prefilterModel.placeholder = 'bijv. typesafe/jev-1.13-20260917';
+  const prefilterRouting = input('text', draft.prefilterProviderRouting, (v) => {
+    draft.prefilterProviderRouting = v;
+  });
+  prefilterRouting.placeholder = 'bijv. typesafe';
+  const prefilterStatus = el('span', { class: 'muted' });
+
+  const prefilterFields = el('div', {}, [
+    prefilterProxyHint,
+    field(
+      'Endpoint',
+      prefilterEndpoint,
+      'Een decisions-endpoint voor beslismodellen, bijv. https://openrouter.ai/api/alpha/decisions. Een gewoon chatmodel werkt hier niet.',
+    ),
+    vault.exists
+      ? field('API-key voor de voorfilter', el('div', { class: 'muted', text: 'Staat versleuteld in de vault. Hef de vault op om hem te wijzigen.' }))
+      : field('API-key voor de voorfilter (optioneel)', prefilterApiKey, 'Leeg: de key van het taalmodel hierboven. Een eigen key is handig voor een aparte uitgavenlimiet, of nodig in de proxy-route.'),
+    field(
+      'Model',
+      prefilterModel,
+      'Liefst een vaste versie (typesafe/jev-1.13-20260917) in plaats van ~typesafe/jev-latest: de drempel is op versie 1.13 afgesteld en een nieuwe versie mag die niet ongemerkt verschuiven.',
+    ),
+    field('Provider-routing', prefilterRouting, 'Zelfde vorm als bij het taalmodel. Jev draait alleen bij TypeSafe.'),
+    el('div', { class: 'actions' }, [
+      el('button', { text: 'Voorfilter testen', onclick: (e) => testPrefilterRoute(e.currentTarget) }),
+      prefilterStatus,
+    ]),
+  ]);
+
+  function syncPrefilter() {
+    prefilterFields.style.display = draft.jevPrefilterEnabled ? '' : 'none';
+    prefilterProxyHint.style.display = draft.transport === 'direct' ? 'none' : '';
+  }
+  syncPrefilter();
+
+  async function testPrefilterRoute(button) {
+    if (!(await save(button))) return;
+    button.disabled = true;
+    prefilterStatus.className = 'muted';
+    prefilterStatus.textContent = 'Testen…';
+    try {
+      const { noul, model, provider } = await send(Msg.TEST_PREFILTER);
+      prefilterStatus.className = 'badge ok';
+      prefilterStatus.textContent = `Voorfilter werkt — ${model}${provider ? ` via ${provider}` : ''}, testvraag beantwoord met ${noul.toFixed(2)}`;
+    } catch (err) {
+      prefilterStatus.className = 'error';
+      prefilterStatus.textContent = err.message;
+    } finally {
+      button.disabled = false;
+    }
+  }
 
   const prefilterField = el('div', { class: 'field' }, [
     el('label', { class: 'row', style: 'color:var(--text)' }, [
       prefilterCheckbox,
-      el('span', { text: 'Voorfilter met Jev vóór de relevantiestap' }),
+      el('span', { text: 'Voorfilter met een beslismodel vóór de relevantiestap' }),
     ]),
     el('div', {
       class: 'hint',
-      text: 'Snellere filtering bij profielen met veel bronnen: het beslismodel Jev zeeft de nieuwe publicaties eerst ruim, en alleen wat overblijft beoordeelt het taalmodel. Bij vervolgscans met weinig nieuwe publicaties scheelt het weinig. Lukt de voorfilter niet, dan gaat alles gewoon naar het taalmodel.',
+      text: 'Snellere filtering bij profielen met veel bronnen: een beslismodel (standaard Jev van TypeSafe) zeeft de te beoordelen publicaties eerst ruim, en alleen wat overblijft beoordeelt het taalmodel. Bij vervolgscans met weinig nieuwe publicaties scheelt het weinig. Lukt de voorfilter niet, dan gaat alles gewoon naar het taalmodel.',
     }),
     el('div', {
       class: 'hint',
-      text: 'Let op: met dit vinkje aan gaan titels en tekstfragmenten van publicaties, en de gebruikersvraag van het profiel, ook naar TypeSafe (de maker van Jev), via OpenRouter.',
+      text: 'Let op: met dit vinkje aan gaan titels en tekstfragmenten van publicaties, en de gebruikersvraag van het profiel, ook naar de aanbieder van dat model (bij Jev: TypeSafe, via OpenRouter).',
     }),
-    prefilterProxyHint,
+    prefilterFields,
   ]);
 
   const syncTransport = () => {
     proxyFields.style.display = draft.transport === 'proxy' ? '' : 'none';
     directFields.style.display = draft.transport === 'direct' ? '' : 'none';
-    prefilterCheckbox.disabled = draft.transport !== 'direct';
-    prefilterProxyHint.style.display = draft.transport === 'direct' ? 'none' : '';
+    syncPrefilter();
   };
   transportSelect.addEventListener('change', () => {
     draft.transport = transportSelect.value;
@@ -356,7 +419,7 @@ function vaultSection(vault, draft) {
   if (!vault.exists) {
     children.push(
       el('p', {
-        text: 'De key staat nu leesbaar in de browseropslag: wie bij het browserprofiel kan, leest hem, en hij gaat mee in een backup of profielsynchronisatie. Versleutel hem met een wachtwoordzin om dat te voorkomen. Na een herstart van de browser vraagt de extensie de wachtwoordzin opnieuw; automatisch synthetiseren wacht tot dan.',
+        text: 'De key(s) staan nu leesbaar in de browseropslag: wie bij het browserprofiel kan, leest ze, en ze gaan mee in een backup of profielsynchronisatie. Versleutel ze met een wachtwoordzin om dat te voorkomen. Na een herstart van de browser vraagt de extensie de wachtwoordzin opnieuw; automatisch synthetiseren wacht tot dan.',
       }),
       el('div', { class: 'grid' }, [passphrase, confirmation]),
       el('div', { class: 'actions' }, [
@@ -367,7 +430,9 @@ function vaultSection(vault, draft) {
               if (passphrase.value !== confirmation.value) throw new Error('De wachtwoordzinnen verschillen');
               // Eerst de key uit het formulier opslaan: de vault versleutelt
               // wat er opgeslagen staat.
-              await send(Msg.SAVE_SETTINGS, { patch: { directApiKey: draft.directApiKey } });
+              await send(Msg.SAVE_SETTINGS, {
+                patch: { directApiKey: draft.directApiKey, prefilterApiKey: draft.prefilterApiKey },
+              });
               await send(Msg.VAULT_ENABLE, { passphrase: passphrase.value });
             }),
         }),

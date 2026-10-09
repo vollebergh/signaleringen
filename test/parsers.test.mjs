@@ -16,7 +16,7 @@ import {
   repairJsonArray,
   emptyContentMessage,
   isPrefilterActive,
-  decisionsUrl,
+  prefilterConnection,
   buildDecisionsRequest,
   readDecisions,
   prefilterPublications,
@@ -554,6 +554,7 @@ test('parseVerdicts leest scores, ook als tekst, en begrenst ze op 0–100', () 
 const pubs = (n) =>
   Array.from({ length: n }, (_, i) => ({ sourceName: 'Bron', title: `Titel ${i}`, description: `Tekst ${i}` }));
 const directSettings = {
+  ...DefaultSettings,
   transport: 'direct',
   directBaseUrl: 'https://openrouter.ai/api/v1/',
   directApiKey: 'sk-test',
@@ -591,16 +592,30 @@ const answerWith = (nouls) => (body, call) => {
   return jsonResponse({ model: 'typesafe/jev-test', answers, usage: { input_tokens: 10, cost: 0.00001 } });
 };
 
-test('isPrefilterActive: alleen met vinkje én route direct', () => {
+test('isPrefilterActive: vinkje, endpoint, model en een key; via proxy alleen met eigen key', () => {
   assert.equal(DefaultSettings.jevPrefilterEnabled, false);
   assert.equal(isPrefilterActive(DefaultSettings), false);
   assert.equal(isPrefilterActive(directSettings), true);
   assert.equal(isPrefilterActive({ ...directSettings, transport: 'proxy' }), false);
+  assert.equal(isPrefilterActive({ ...directSettings, transport: 'proxy', prefilterApiKey: 'sk-jev' }), true);
+  assert.equal(isPrefilterActive({ ...directSettings, prefilterModel: ' ' }), false);
 });
 
-test('decisionsUrl hoort naast de base-URL van OpenRouter', () => {
-  assert.equal(decisionsUrl('https://openrouter.ai/api/v1'), 'https://openrouter.ai/api/alpha/decisions');
-  assert.equal(decisionsUrl('https://openrouter.ai/api/v1/'), 'https://openrouter.ai/api/alpha/decisions');
+test('prefilterConnection: eigen key gaat voor, anders die van het taalmodel; routing als provider-blok', () => {
+  const shared = prefilterConnection(directSettings);
+  assert.equal(shared.url, 'https://openrouter.ai/api/alpha/decisions');
+  assert.equal(shared.key, 'sk-test');
+  assert.equal(shared.model, 'typesafe/jev-1.13-20260917');
+  assert.deepEqual(shared.provider, { order: ['typesafe'], allow_fallbacks: false });
+  assert.equal(prefilterConnection({ ...directSettings, prefilterApiKey: ' sk-jev ' }).key, 'sk-jev');
+  assert.equal(prefilterConnection({ ...directSettings, transport: 'proxy' }).key, '');
+});
+
+test('validateRouting: voorfilter-velden alleen als het vinkje aan staat', () => {
+  assert.deepEqual(validateRouting({ ...DefaultSettings, prefilterEndpoint: 'x' }), []);
+  const errors = validateRouting({ ...DefaultSettings, jevPrefilterEnabled: true, prefilterEndpoint: 'http://a', prefilterModel: '', prefilterProviderRouting: 'typesafe/fp5' });
+  assert.equal(errors.length, 3);
+  assert.deepEqual(validateRouting({ ...DefaultSettings, jevPrefilterEnabled: true }), []);
 });
 
 test('buildDecisionsRequest: publicaties in state, vraag letterlijk in de noul, tekst van derden niet', () => {
@@ -608,7 +623,10 @@ test('buildDecisionsRequest: publicaties in state, vraag letterlijk in de noul, 
     [{ sourceName: 'B', title: 'T', description: 'x'.repeat(5000) }],
     '  additionaliteit in het\n natuurbeschermingsrecht? ',
   );
-  assert.equal(request.model, AppConfig.JEV_MODEL);
+  assert.equal(request.model, undefined, 'zonder verbinding geen model');
+  const withConnection = buildDecisionsRequest([{ title: 'T' }], 'q', prefilterConnection(directSettings));
+  assert.equal(withConnection.model, 'typesafe/jev-1.13-20260917');
+  assert.deepEqual(withConnection.provider, { order: ['typesafe'], allow_fallbacks: false });
   assert.deepEqual(Object.keys(request.state), ['publicaties']);
   assert.equal(request.state.publicaties.p0.titel, 'T');
   assert.ok(request.state.publicaties.p0.tekst.length <= AppConfig.PROMPT_FILTER_TEXT_MAX_CHARS + 1);
@@ -631,6 +649,8 @@ test('prefilterPublications: scores 0–100, drempel uit AppConfig, batches van 
   assert.equal(calls.length, 2);
   assert.equal(calls[0].url, 'https://openrouter.ai/api/alpha/decisions');
   assert.equal(calls[0].headers.Authorization, 'Bearer sk-test');
+  assert.equal(calls[0].body.model, 'typesafe/jev-1.13-20260917');
+  assert.deepEqual(calls[0].body.provider, { order: ['typesafe'], allow_fallbacks: false });
   assert.equal(Object.keys(calls[1].body.questions).length, 5);
   assert.equal(result.length, n);
   assert.deepEqual(result[0], { score: 4, passes: false });
@@ -775,4 +795,17 @@ test('terugkijktijd: standaard 7 dagen, hele dagen, begrensd', () => {
   assert.equal(normalizeLookbackDays(''), AppConfig.DEFAULT_LOOKBACK_DAYS);
   assert.equal(normalizeLookbackDays('abc'), AppConfig.DEFAULT_LOOKBACK_DAYS);
   assert.equal(normalizeLookbackDays(10_000), AppConfig.MAX_LOOKBACK_DAYS);
+});
+
+// ── Vault met twee keys ─────────────────────────────────────────────────────
+
+import { parseVaultSecret } from '../src/data/settings-repository.js';
+
+test('parseVaultSecret: nieuwe vault met beide keys, oude vault met alleen de kale key', () => {
+  assert.deepEqual(parseVaultSecret(JSON.stringify({ directApiKey: 'sk-a', prefilterApiKey: 'sk-b' })), {
+    directApiKey: 'sk-a',
+    prefilterApiKey: 'sk-b',
+  });
+  assert.deepEqual(parseVaultSecret('sk-or-v1-oud'), { directApiKey: 'sk-or-v1-oud', prefilterApiKey: '' });
+  assert.deepEqual(parseVaultSecret('"string"'), { directApiKey: '"string"', prefilterApiKey: '' });
 });

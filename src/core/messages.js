@@ -39,6 +39,7 @@ export const Msg = Object.freeze({
   GET_SETTINGS: 'settings/get',
   SAVE_SETTINGS: 'settings/save',
   TEST_CONNECTION: 'settings/testConnection',
+  TEST_PREFILTER: 'settings/testPrefilter',
   APPLY_SCHEDULE: 'settings/applySchedule',
 
   // Vault voor de API-key (B-49)

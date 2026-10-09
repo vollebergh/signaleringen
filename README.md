@@ -263,8 +263,9 @@ een `provider`-blok uit de instellingen onder **Routing**, standaard
 `{"order":["deepinfra"],"allow_fallbacks":false}`. De tags gaan ongewijzigd naar
 `order`; OpenRouter accepteert daar ook `provider/kwantisatie` (`deepinfra/fp8`).
 
-De voorfilter met Jev (zie hieronder) gebruikt een ander endpoint
-(`/api/alpha/decisions`) en werkt daarom niet via de proxy.
+De voorfilter (zie hieronder) gebruikt een ander endpoint
+(`/api/alpha/decisions`) en gaat daarom niet via de proxy; in de proxy-route
+werkt hij alleen met een eigen key in het voorfilterveld.
 
 **Opnieuw proberen en uitwijken.** Bij een 429, 5xx of time-out probeert de
 extensie elke aanroep tot 3 keer opnieuw (2 s, verdubbelend, maximaal 30 s;
@@ -307,26 +308,40 @@ signalering, maar staan apart om zelf na te kijken. Drempels in
 ## Voorfilter met Jev (optioneel)
 
 Bij **Instellingen → Voorfilter** staat één vinkje, standaard uit. Aan legt de
-extensie de te beoordelen publicaties eerst voor aan Jev, het beslismodel van
-TypeSafe (`~typesafe/jev-latest` via OpenRouters alpha-endpoint
-`POST /api/alpha/decisions`, met dezelfde key). Jev geeft per publicatie een
-kans dat ze over de gebruikersvraag gaat; wat onder 0,10 valt
-(`AppConfig.JEV_PREFILTER_THRESHOLD`, 10 op 100) gaat niet meer naar DeepSeek.
+extensie de te beoordelen publicaties eerst voor aan een beslismodel —
+standaard Jev van TypeSafe via OpenRouters decisions-endpoint. Dat geeft per
+publicatie een kans dat ze over de gebruikersvraag gaat; wat onder 0,10 valt
+(`AppConfig.JEV_PREFILTER_THRESHOLD`, 10 op 100) gaat niet meer naar het
+taalmodel.
 
-- **Waarom:** de relevantiestap van DeepSeek is de trage stap (± 0,8 s per
-  publicatie). Jev zeeft 150 publicaties in ± 1–2 s. Bij een eerste scan of een
-  profiel met veel bronnen scheelt dat ongeveer de helft van de filtertijd; bij
+Met het vinkje aan verschijnen vier velden, zodat een gebruiker zijn eigen
+key en model kiest:
+
+| Veld | Standaard | Toelichting |
+| --- | --- | --- |
+| Endpoint | `https://openrouter.ai/api/alpha/decisions` | Een decisions-endpoint; een chatmodel werkt hier niet |
+| API-key | leeg | Leeg: de key van het taalmodel. Eigen key: aparte uitgavenlimiet, en nodig via een proxy. Gaat mee in de vault |
+| Model | `typesafe/jev-1.13-20260917` | Vaste versie: de drempel is op 1.13 afgesteld |
+| Provider-routing | `typesafe` | Zelfde vorm als bij het taalmodel |
+
+*Voorfilter testen* slaat op en stelt één testvraag; het toont model en
+provider die antwoordden.
+
+- **Waarom:** de relevantiestap is de trage stap (± 0,8 s per publicatie).
+  Jev zeeft 150 publicaties in ± 1–2 s. Bij een eerste scan of een profiel met
+  veel bronnen scheelt dat ongeveer de helft van de filtertijd; bij
   vervolgscans met weinig nieuwe publicaties weinig.
 - **Veilig ruim:** de drempel ligt laag, zodat de voorfilter liever te veel
-  doorlaat. Wat Jev wegfiltert, staat bij *Weggefilterd* met het label
-  "voorfilter" en de Jev-score, en wordt als gezien vastgelegd.
-- **Nooit een mislukte scan:** bij elke fout van het alpha-endpoint, een
-  time-out of een ontbrekend antwoord vervalt de voorfilter voor die scan en
-  gaat alles naar DeepSeek. Het scanresultaat meldt dat.
-- **Alleen met een eigen key** (route `direct`): de proxy kent alleen
-  `chat/completions`. In de proxy-route staat het vinkje uitgeschakeld.
+  doorlaat. Wat hij wegfiltert, staat bij *Weggefilterd* met het label
+  "voorfilter" en de score, en wordt als gezien vastgelegd.
+- **Nooit een mislukte scan:** bij elke fout, time-out of ontbrekend antwoord
+  vervalt de voorfilter voor die scan en gaat alles naar het taalmodel. Het
+  scanresultaat meldt dat.
+- **Proxy-route:** daar staat geen key in de browser; de voorfilter werkt dan
+  alleen met een eigen key in het voorfilterveld.
 - **Extra verwerker:** met het vinkje aan gaan titels, tekstfragmenten en de
-  gebruikersvraag ook naar TypeSafe.
+  gebruikersvraag ook naar de aanbieder van het beslismodel (bij Jev:
+  TypeSafe).
 
 Achtergrond en metingen: B-D10 in de vault (*Design - Beslissingen*).
 

@@ -106,7 +106,8 @@ export const AppConfig = {
 
   /**
    * Voorfilter met Jev (B-58, besluit B-D10). Optioneel, standaard uit
-   * (`jevPrefilterEnabled`). Jev geeft per publicatie een kans 0–1 dat ze
+   * (`jevPrefilterEnabled`); endpoint, key, model en routing staan in de
+   * instellingen (`prefilter*`). Jev geeft per publicatie een kans 0–1 dat ze
    * over de gebruikersvraag gaat; de extensie rekent die om naar 0–100. Wat
    * onder de drempel valt, gaat niet naar DeepSeek.
    *
@@ -117,7 +118,6 @@ export const AppConfig = {
    *
    * Batches van 40: state plus langste vraag moet binnen 32k tokens blijven.
    */
-  JEV_MODEL: '~typesafe/jev-latest',
   JEV_PREFILTER_THRESHOLD: 10,
   JEV_BATCH_SIZE: 40,
   JEV_TIMEOUT_MS: 30_000,
@@ -230,4 +230,20 @@ export const DefaultSettings = {
    * `chat/completions`. Aan betekent ook TypeSafe als extra verwerker.
    */
   jevPrefilterEnabled: false,
+
+  /**
+   * Verbinding voor de voorfilter, los van die van het taalmodel: een
+   * beslismodel via een decisions-endpoint (OpenRouter `/api/alpha/decisions`).
+   * Lege key: dezelfde key als het taalmodel (`directApiKey`). Met een eigen
+   * key werkt de voorfilter ook in de proxy-route.
+   *
+   * Het model staat op een vaste versie, niet op `~typesafe/jev-latest`: de
+   * drempel (`JEV_PREFILTER_THRESHOLD`) is op Jev 1.13 gemeten, en een nieuwe
+   * versie mag die niet ongemerkt verschuiven. Verdwijnt de versie, dan geeft
+   * de voorfilter een fout en gaat alles naar het taalmodel.
+   */
+  prefilterEndpoint: 'https://openrouter.ai/api/alpha/decisions',
+  prefilterApiKey: '',
+  prefilterModel: 'typesafe/jev-1.13-20260917',
+  prefilterProviderRouting: 'typesafe',
 };

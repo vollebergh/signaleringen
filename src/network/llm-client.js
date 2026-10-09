@@ -107,6 +107,17 @@ export function validateRouting(settings) {
     if (!String(settings.fallbackModel ?? '').trim()) errors.push('Uitwijkroute: vul een model in, of zet de uitwijkroute uit');
     check('Uitwijkroute', settings.fallbackProviderRouting);
   }
+  if (settings.jevPrefilterEnabled) {
+    let endpointOk = false;
+    try {
+      endpointOk = new URL(String(settings.prefilterEndpoint ?? '').trim()).protocol === 'https:';
+    } catch {
+      endpointOk = false;
+    }
+    if (!endpointOk) errors.push('Voorfilter: het endpoint moet een https-adres zijn');
+    if (!String(settings.prefilterModel ?? '').trim()) errors.push('Voorfilter: vul een model in');
+    check('Voorfilter', settings.prefilterProviderRouting);
+  }
   return errors;
 }
 
@@ -520,19 +531,31 @@ export function repairJsonArray(json) {
 // Het endpoint is alpha: elke fout, of één ontbrekend antwoord, betekent dat
 // de voorfilter voor de hele scan vervalt en alles naar DeepSeek gaat.
 
-/** Voorfilter gebruiken? Alleen in de route `direct`: de proxy kent alleen chat/completions. */
-export function isPrefilterActive(settings) {
-  return Boolean(settings?.jevPrefilterEnabled) && settings.transport === 'direct';
+/**
+ * De verbinding voor de voorfilter: eigen endpoint, model en routing; de key
+ * is die van de voorfilter, of anders die van het taalmodel (alleen in de
+ * route `direct` — via een proxy staat er geen key in de browser).
+ * Geëxporteerd voor de tests.
+ */
+export function prefilterConnection(settings) {
+  const ownKey = settings?.prefilterApiKey?.trim() ?? '';
+  const sharedKey = settings?.transport === 'direct' ? (settings.directApiKey?.trim() ?? '') : '';
+  return {
+    url: String(settings?.prefilterEndpoint ?? '').trim(),
+    key: ownKey || sharedKey,
+    model: String(settings?.prefilterModel ?? '').trim(),
+    provider: providerRouting(settings?.prefilterProviderRouting),
+  };
 }
 
 /**
- * Het decisions-endpoint naast de ingestelde base-URL:
- * `https://openrouter.ai/api/v1` → `https://openrouter.ai/api/alpha/decisions`.
- * Geëxporteerd voor de tests.
+ * Voorfilter gebruiken? Vinkje aan, en een endpoint, model en key. In de
+ * proxy-route dus alleen met een eigen key voor de voorfilter.
  */
-export function decisionsUrl(baseUrl) {
-  const base = String(baseUrl ?? '').trim().replace(/\/+$/, '');
-  return new URL('../alpha/decisions', `${base}/`).href;
+export function isPrefilterActive(settings) {
+  if (!settings?.jevPrefilterEnabled) return false;
+  const { url, key, model } = prefilterConnection(settings);
+  return Boolean(url && key && model);
 }
 
 /**
@@ -547,7 +570,7 @@ export function decisionsUrl(baseUrl) {
  * van 151 en 166 van 200 boven de drempel, tegen 73 en 39 zo.
  * Geëxporteerd voor de tests.
  */
-export function buildDecisionsRequest(batch, userQuery) {
+export function buildDecisionsRequest(batch, userQuery, connection = {}) {
   const query = String(userQuery ?? '')
     .replace(/\s+/g, ' ')
     .trim()
@@ -564,7 +587,12 @@ export function buildDecisionsRequest(batch, userQuery) {
     };
     questions[key] = { type: 'noul', instructions: `Gaat \`publicaties.${key}\` over ${query}?` };
   });
-  return { model: AppConfig.JEV_MODEL, state: { publicaties }, questions };
+  return {
+    model: connection.model,
+    ...(connection.provider ? { provider: connection.provider } : {}),
+    state: { publicaties },
+    questions,
+  };
 }
 
 /**
@@ -585,19 +613,20 @@ export function readDecisions(parsed, size) {
   });
 }
 
-async function decideBatch(batch, userQuery, settings) {
-  const response = await fetchWithTimeout(
-    decisionsUrl(settings.directBaseUrl),
+async function postDecisions(connection, body) {
+  return fetchWithTimeout(
+    connection.url,
     {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${settings.directApiKey.trim()}`,
-      },
-      body: JSON.stringify(buildDecisionsRequest(batch, userQuery)),
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${connection.key}` },
+      body: JSON.stringify(body),
     },
     AppConfig.JEV_TIMEOUT_MS,
   );
+}
+
+async function decideBatch(batch, userQuery, connection) {
+  const response = await postDecisions(connection, buildDecisionsRequest(batch, userQuery, connection));
   const text = await response.text();
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}: ${apiErrorMessage(text)}`);
@@ -624,11 +653,12 @@ async function decideBatch(batch, userQuery, settings) {
 export async function prefilterPublications(publications, userQuery, settings) {
   if (publications.length === 0) return [];
 
+  const connection = prefilterConnection(settings);
   const scores = [];
   try {
     for (let start = 0; start < publications.length; start += AppConfig.JEV_BATCH_SIZE) {
       const batch = publications.slice(start, start + AppConfig.JEV_BATCH_SIZE);
-      scores.push(...(await decideBatch(batch, userQuery, settings)));
+      scores.push(...(await decideBatch(batch, userQuery, connection)));
     }
   } catch (err) {
     const reason = err?.name === 'AbortError' ? 'timeout' : (err?.message ?? String(err));
@@ -752,4 +782,31 @@ export async function testConnection(settings, which = 'primary') {
     temperature: 0,
   });
   return { reply: result.content.trim().slice(0, 100), provider: result.provider, model: result.model };
+}
+
+/**
+ * Testaanroep voor de voorfilter: één vraag over een vaste, onschuldige
+ * publicatie. Geeft de kans terug, plus model en provider die antwoordden.
+ * @returns {Promise<{noul: number, model: string, provider: string | null}>}
+ */
+export async function testPrefilter(settings) {
+  const connection = prefilterConnection(settings);
+  if (!connection.url || !connection.model) throw new Error('Vul endpoint en model van de voorfilter in');
+  if (!connection.key) throw new Error('Geen key voor de voorfilter: vul er een in, of gebruik de route met een eigen API-key');
+  const response = await postDecisions(connection, {
+    model: connection.model,
+    ...(connection.provider ? { provider: connection.provider } : {}),
+    state: { publicaties: { p0: { titel: 'Kamerbrief over stikstofdepositie in Natura 2000-gebieden' } } },
+    questions: { p0: { type: 'noul', instructions: 'Gaat `publicaties.p0` over stikstof?' } },
+  });
+  const text = await response.text();
+  if (!response.ok) throw new Error(`Voorfilter gaf ${response.status}: ${apiErrorMessage(text)}`);
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error('Het antwoord van de voorfilter was geen JSON — is dit een decisions-endpoint?');
+  }
+  const [score] = readDecisions(parsed, 1);
+  return { noul: score / 100, model: parsed.model ?? connection.model, provider: parsed.provider ?? null };
 }

@@ -36,7 +36,7 @@ import {
 import { exportProfiles, exportFilename, previewImport, importProfiles } from '../data/transfer-repository.js';
 
 import { fetchPublications } from '../network/feed-fetcher.js';
-import { testConnection } from '../network/llm-client.js';
+import { testConnection, testPrefilter } from '../network/llm-client.js';
 
 import { runScan, getProgress, isScanning } from './scan-runner.js';
 import { applySchedule, runDueScans, ALARM_NAME } from './scheduler.js';
@@ -214,6 +214,12 @@ const handlers = {
   [Msg.TEST_CONNECTION]: async ({ route } = {}) => {
     const settings = await withApiKey(await getSettings());
     return testConnection(settings, route);
+  },
+
+  [Msg.TEST_PREFILTER]: async () => {
+    const stored = await getSettings();
+    // Ook met het vinkje uit testen: de key uit de vault is dan wel nodig.
+    return testPrefilter(await withApiKey({ ...stored, jevPrefilterEnabled: true }));
   },
 
   [Msg.VAULT_STATUS]: () => getVaultStatus(),
