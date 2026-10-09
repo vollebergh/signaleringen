@@ -78,6 +78,7 @@ export async function renderScan(profileId, scanId) {
       }),
     );
   } else if (synthesis?.text) {
+    send(Msg.MARK_SYNTHESIS_READ, { profileId, createdAt: synthesis.createdAt }).catch(() => {});
     root.append(
       el('div', { class: 'synthesis', text: synthesis.text }),
       el('div', { class: 'actions', style: 'margin-top:10px' }, [

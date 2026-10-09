@@ -57,6 +57,9 @@ export async function renderSyntheses(profileId) {
     root.append(synthesisCard(synthesis, profile, index === 0));
   });
 
+  // De nieuwste staat open, dus die is gezien (B-54).
+  send(Msg.MARK_SYNTHESIS_READ, { profileId, createdAt: syntheses[0].createdAt }).catch(() => {});
+
   return root;
 }
 

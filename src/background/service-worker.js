@@ -9,7 +9,8 @@
  * Standaard start een scan alleen door een klik. Zet je automatisch
  * synthetiseren aan, dan komt daar een alarm bij — de `alarms`-permissie is
  * optioneel en wordt pas op dat moment gevraagd. Meldingen vraagt de extensie
- * niet: wat de automaat oplevert zie je bij het openen van de extensie.
+ * niet: een nieuwe signalering van de automaat zet een teller op het
+ * pictogram (B-54), de inhoud zie je bij het openen van de extensie.
  *
  * De UI-vlakken bevatten zelf geen netwerk- of opslaglogica. Dat houdt de
  * popup wegwerpbaar: hem sluiten breekt nooit een lopende scan af.
@@ -33,6 +34,7 @@ import {
   lock,
   disableVault,
 } from '../data/settings-repository.js';
+import { markRead } from '../data/unread-repository.js';
 import { exportProfiles, exportFilename, previewImport, importProfiles } from '../data/transfer-repository.js';
 
 import { fetchPublications } from '../network/feed-fetcher.js';
@@ -41,6 +43,7 @@ import { testConnection, testPrefilter } from '../network/llm-client.js';
 import { runScan, getProgress, isScanning } from './scan-runner.js';
 import { applySchedule, runDueScans, ALARM_NAME } from './scheduler.js';
 import { parseOpml } from './opml.js';
+import { updateBadge, getUnreadProfileIds } from './badge.js';
 
 // ── Levenscyclus ────────────────────────────────────────────────────────────
 
@@ -48,11 +51,14 @@ chrome.runtime.onInstalled.addListener((details) => {
   log.info(`Geïnstalleerd/bijgewerkt: ${details.reason}`);
   registerContextMenus();
   applySchedule().catch((err) => log.warn('Planner instellen mislukt', err));
+  updateBadge();
 });
 
 chrome.runtime.onStartup.addListener(() => {
   registerContextMenus();
   applySchedule().catch((err) => log.warn('Planner instellen mislukt', err));
+  // De badge zelf overleeft een herstart van de browser niet (B-54).
+  updateBadge();
 });
 
 // De permissie kan buiten de instellingen om worden ingetrokken (via
@@ -135,6 +141,7 @@ const handlers = {
 
   [Msg.DELETE_PROFILE]: async ({ profileId }) => {
     await profiles.deleteProfile(profileId);
+    await updateBadge();
     return true;
   },
 
@@ -191,6 +198,13 @@ const handlers = {
 
   [Msg.GET_LATEST_SYNTHESIS]: ({ profileId }) => scans.getLatestSynthesis(profileId),
 
+  [Msg.LIST_UNREAD]: () => getUnreadProfileIds(),
+
+  [Msg.MARK_SYNTHESIS_READ]: async ({ profileId, createdAt }) => {
+    if (await markRead(profileId, createdAt ?? Infinity)) await updateBadge();
+    return true;
+  },
+
   [Msg.EXPORT_PROFILES]: async ({ profileIds }) => {
     const bundle = await exportProfiles(profileIds);
     return { bundle, filename: exportFilename(bundle) };
@@ -198,8 +212,11 @@ const handlers = {
 
   [Msg.IMPORT_PREVIEW]: ({ bundle }) => previewImport(bundle),
 
-  [Msg.IMPORT_PROFILES]: ({ bundle, profileIds, mode }) =>
-    importProfiles(bundle, { profileIds, mode }),
+  [Msg.IMPORT_PROFILES]: async ({ bundle, profileIds, mode }) => {
+    const result = await importProfiles(bundle, { profileIds, mode });
+    await updateBadge(); // vervangen profielen kunnen een ongelezen signalering kwijt zijn
+    return result;
+  },
 
   [Msg.GET_SETTINGS]: () => getSettings(),
 

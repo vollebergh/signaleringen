@@ -106,6 +106,7 @@ async function loadLatest() {
         content.append(el('p', { class: 'error', text: `⚠ ${warning}` }));
       }
       content.append(el('div', { class: 'synthesis', text: latest.synthesis.text }));
+      send(Msg.MARK_SYNTHESIS_READ, { profileId, createdAt: latest.synthesis.createdAt }).catch(() => {});
       const references = sourceReferences(latest.synthesis.sources);
       if (references) content.append(references);
     } else if (latest.synthesis?.error) {

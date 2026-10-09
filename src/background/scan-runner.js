@@ -23,6 +23,7 @@ import { getSettings, isConfigured, missingConfigMessage, withApiKey } from '../
 import { getProfile } from '../data/profile-repository.js';
 import { normalizeLookbackDays } from '../core/models.js';
 import { saveScan, saveSynthesis, pruneOldScans } from '../data/scan-repository.js';
+import { markUnread } from '../data/unread-repository.js';
 import {
   dedupeKey,
   loadSeen,
@@ -55,7 +56,9 @@ recoverInterruptedScans(isScanning).catch((err) => log.warn('Afgebroken scans na
 /**
  * Start een scan of geeft de lopende terug.
  * @param {string} profileId
- * @param {{ sourceIds?: string[] }} [options] beperk de scan tot deze bronnen
+ * @param {{ sourceIds?: string[], automatic?: boolean }} [options]
+ *   `sourceIds` beperkt de scan tot deze bronnen; `automatic` (de planner)
+ *   zet een nieuwe signalering op ongelezen (B-54)
  * @returns {Promise<{scanId: string, relevantCount: number, newCount: number}>}
  */
 export function runScan(profileId, options = {}) {
@@ -357,14 +360,18 @@ async function executeScan(profileId, options) {
       setProgress(profileId, { phase: 'synthesizing', count: relevant.length });
       try {
         const synthesis = await synthesizeProfile(profile, relevant, settings);
+        const createdAt = Date.now();
         await saveSynthesis({
           scanId,
           profileId,
-          createdAt: Date.now(),
+          createdAt,
           text: synthesis.text,
           sources: synthesis.sources,
           warnings: synthesis.warnings,
         });
+        if (options.automatic && synthesis.text) {
+          await markUnread(profileId, scanId, createdAt);
+        }
         if (synthesis.warnings.length > 0) {
           log.warn(`Synthese voor '${profile.name}' met waarschuwingen`, synthesis.warnings);
         }

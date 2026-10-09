@@ -44,10 +44,11 @@ async function init() {
 
 async function render() {
   try {
-    const [profiles, settings, vault] = await Promise.all([
+    const [profiles, settings, vault, unread] = await Promise.all([
       send(Msg.LIST_PROFILES),
       send(Msg.GET_SETTINGS),
       send(Msg.VAULT_STATUS),
+      send(Msg.LIST_UNREAD),
     ]);
 
     clear(content);
@@ -117,21 +118,26 @@ async function render() {
     }
 
     for (const profile of profiles) {
-      content.append(await profileCard(profile));
+      content.append(await profileCard(profile, unread.includes(profile.id)));
     }
   } catch (err) {
     showError(content, err);
   }
 }
 
-async function profileCard(profile) {
+async function profileCard(profile, isUnread) {
   const status = el('div', { class: 'status' });
   statusNodes.set(profile.id, status);
 
   const card = el('div', { class: 'profile' }, [
     el('div', { class: 'row-between' }, [
       el('div', {}, [
-        el('div', { class: 'name', text: profile.name || '(naamloos)' }),
+        el('div', { class: 'name' }, [
+          profile.name || '(naamloos)',
+          // Nieuwe signalering van de automatische synthese (B-54); gelezen
+          // zodra je hem in het dashboard of side panel opent.
+          isUnread ? el('span', { class: 'badge unread', text: 'nieuw' }) : null,
+        ]),
         el('div', {
           class: 'meta',
           text: `${profile.sources.length} bron${profile.sources.length === 1 ? '' : 'nen'}${

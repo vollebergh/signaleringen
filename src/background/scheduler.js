@@ -11,8 +11,9 @@
  * handmatig gescand, dan hoeft de automaat niet meteen opnieuw.
  *
  * Er is geen melding bij nieuwe resultaten — de extensie vraagt geen
- * `notifications`-permissie. Wat de automaat oplevert zie je bij het openen van
- * de popup, het dashboard of het side panel.
+ * `notifications`-permissie. Een nieuwe signalering zet wel een teller op het
+ * extensiepictogram (B-54); de inhoud zie je bij het openen van de popup, het
+ * dashboard of het side panel.
  */
 
 import { AppConfig } from '../core/config.js';
@@ -23,6 +24,7 @@ import { getLatestScan } from '../data/scan-repository.js';
 import { isConfigured, getVaultStatus } from '../data/settings-repository.js';
 import { runScan, isScanning } from './scan-runner.js';
 import { missingOrigins } from './permissions.js';
+import { updateBadge } from './badge.js';
 
 export const ALARM_NAME = 'signaleringen-auto-synthese';
 
@@ -117,7 +119,7 @@ export async function runDueScans() {
     }
 
     try {
-      const result = await runScan(profile.id);
+      const result = await runScan(profile.id, { automatic: true });
       ran += 1;
       log.info(
         `Automatische synthese '${profile.name}': ${result.relevantCount} relevant van ${result.totalFetched}`,
@@ -127,5 +129,6 @@ export async function runDueScans() {
     }
   }
 
+  if (ran > 0) await updateBadge();
   return { ran };
 }

@@ -177,8 +177,10 @@ in twee lagen, expres:
 
 Eén alarm tikt elk kwartier en kijkt wie aan de beurt is. "Aan de beurt" wordt
 afgeleid uit de datum van de laatste scan, dus een handmatige scan schuift de
-klok mee. Meldingen vraagt de extensie niet: wat de automaat oplevert zie je bij
-het openen van de extensie.
+klok mee. Meldingen vraagt de extensie niet: een nieuwe signalering van de
+automaat zet een teller op het extensiepictogram en een label *nieuw* in de
+popup. Beide verdwijnen zodra je de signalering in het dashboard of het side
+panel bekijkt.
 
 ## Signaleringen teruglezen
 

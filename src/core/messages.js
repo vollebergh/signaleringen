@@ -29,6 +29,9 @@ export const Msg = Object.freeze({
   // Syntheses
   LIST_SYNTHESES: 'synthesis/list',
   GET_LATEST_SYNTHESIS: 'synthesis/latest',
+  // Ongelezen signaleringen van de automatische synthese (B-54)
+  LIST_UNREAD: 'synthesis/unread',
+  MARK_SYNTHESIS_READ: 'synthesis/markRead',
 
   // Export en import
   EXPORT_PROFILES: 'data/export',
