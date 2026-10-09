@@ -271,3 +271,24 @@ label {
   color: var(--text-muted);
   padding: 32px 16px;
 }
+
+/* Bronverwijzingen onder een signalering, met het nummer uit de tekst */
+.source-references {
+  list-style: none;
+  padding-left: 0;
+  margin: 8px 0 0;
+}
+
+.source-references li {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 4px;
+  font-size: 0.85rem;
+}
+
+.source-ref-nr {
+  flex: none;
+  min-width: 2.2em;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}

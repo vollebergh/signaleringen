@@ -8,7 +8,7 @@
  */
 
 import { Msg, send } from '../../../core/messages.js';
-import { el, formatDate, formatDateTime, openUrl } from '../../shared/dom.js';
+import { el, sourceReferences, formatDate, formatDateTime, openUrl } from '../../shared/dom.js';
 
 export async function renderScan(profileId, scanId) {
   const [profile, results] = await Promise.all([
@@ -81,30 +81,7 @@ export async function renderScan(profileId, scanId) {
           onclick: (event) => copySynthesis(synthesis, profile, event.currentTarget),
         }),
       ]),
-      synthesis.sources?.length
-        ? el('div', {}, [
-            el('p', { class: 'muted', style: 'margin-bottom:0', text: 'Bronverwijzingen' }),
-            el(
-              'ol',
-              { class: 'source-list', style: 'padding-left:1.6em' },
-              synthesis.sources.map((source) =>
-                el('li', {}, [
-                  source.url
-                    ? el('a', {
-                        href: source.url,
-                        text: source.title,
-                        onclick: (event) => {
-                          event.preventDefault();
-                          openUrl(source.url);
-                        },
-                      })
-                    : el('span', { text: source.title }),
-                  el('span', { class: 'muted', text: ` — ${source.sourceName}` }),
-                ]),
-              ),
-            ),
-          ])
-        : null,
+      sourceReferences(synthesis.sources),
     );
   } else {
     root.append(

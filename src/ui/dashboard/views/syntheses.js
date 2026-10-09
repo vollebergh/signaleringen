@@ -8,7 +8,7 @@
  */
 
 import { Msg, send } from '../../../core/messages.js';
-import { el, formatDateTime, openUrl } from '../../shared/dom.js';
+import { el, sourceReferences, formatDateTime } from '../../shared/dom.js';
 
 export async function renderSyntheses(profileId) {
   const [profile, syntheses] = await Promise.all([
@@ -92,30 +92,7 @@ function synthesisCard(synthesis, profile, expanded) {
         },
       }),
     ]),
-    synthesis.sources.length > 0
-      ? el('div', {}, [
-          el('p', { class: 'muted', style: 'margin-bottom:0', text: 'Bronverwijzingen' }),
-          el(
-            'ol',
-            { class: 'source-list', style: 'padding-left:1.6em' },
-            synthesis.sources.map((source) =>
-              el('li', {}, [
-                source.url
-                  ? el('a', {
-                      href: source.url,
-                      text: source.title,
-                      onclick: (event) => {
-                        event.preventDefault();
-                        openUrl(source.url);
-                      },
-                    })
-                  : el('span', { text: source.title }),
-                el('span', { class: 'muted', text: ` — ${source.sourceName}` }),
-              ]),
-            ),
-          ),
-        ])
-      : null,
+    sourceReferences(synthesis.sources),
   );
 
   return details;

@@ -93,3 +93,39 @@ export function openUrl(url) {
     /* ongeldige URL wordt genegeerd */
   }
 }
+
+/**
+ * Bronverwijzingen onder een signalering: elk nummer staat er letterlijk als
+ * "[n]", zoals in de tekst. Niet via de nummering van een `<ol>`: die hangt
+ * af van `list-style`, en `.source-list` zet die uit — de nummers vielen
+ * daardoor weg.
+ * @param {Array<{index: number, title: string, url: string, sourceName: string}>} sources
+ */
+export function sourceReferences(sources) {
+  if (!sources?.length) return null;
+  return el('div', {}, [
+    el('p', { class: 'muted', style: 'margin-bottom:0', text: 'Bronverwijzingen' }),
+    el(
+      'ul',
+      { class: 'source-references' },
+      sources.map((source) =>
+        el('li', {}, [
+          el('span', { class: 'source-ref-nr', text: `[${source.index}]` }),
+          el('span', {}, [
+            source.url
+            ? el('a', {
+                href: source.url,
+                text: source.title,
+                onclick: (event) => {
+                  event.preventDefault();
+                  openUrl(source.url);
+                },
+              })
+              : el('span', { text: source.title }),
+            el('span', { class: 'muted', text: ` — ${source.sourceName}` }),
+          ]),
+        ]),
+      ),
+    ),
+  ]);
+}

@@ -5,7 +5,7 @@
  */
 
 import { Msg, send } from '../../core/messages.js';
-import { $, el, clear, applyTheme, formatDate, formatDateTime, openUrl, showError } from '../shared/dom.js';
+import { $, el, clear, sourceReferences, applyTheme, formatDate, formatDateTime, openUrl, showError } from '../shared/dom.js';
 
 const content = $('#content');
 const profileSelect = $('#profile-select');
@@ -88,11 +88,15 @@ async function loadLatest() {
         content.append(el('p', { class: 'error', text: `⚠ ${warning}` }));
       }
       content.append(el('div', { class: 'synthesis', text: latest.synthesis.text }));
+      const references = sourceReferences(latest.synthesis.sources);
+      if (references) content.append(references);
     } else if (latest.synthesis?.error) {
       content.append(el('p', { class: 'error', text: `Synthese mislukt: ${latest.synthesis.error}` }));
     }
 
-    if (latest.relevant.length > 0) {
+    // Met een signalering staan de publicaties al genummerd in de
+    // bronverwijzingen; alleen zonder signalering de losse lijst.
+    if (latest.relevant.length > 0 && !latest.synthesis?.sources?.length) {
       content.append(el('div', { class: 'section-title', text: 'Publicaties' }));
       latest.relevant.forEach((result) => content.append(publicationRow(result)));
     }
