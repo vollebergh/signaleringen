@@ -180,31 +180,37 @@ export const DefaultSettings = {
   proxyToken: '', // gedeeld token, géén LLM-provider-key
   directBaseUrl: 'https://openrouter.ai/api/v1',
   directApiKey: '',
-  model: '@preset/signaleringen',
+  /**
+   * Model en routing staan los in de instellingen, zodat het venster ook
+   * zonder de preset van de workspace werkt (productiefase). Vooringevuld met
+   * wat `@preset/signaleringen` vastlegt: DeepSeek V4 Flash 0731 bij
+   * DeepInfra. Een preset blijft mogelijk; dan geldt de routing hieronder niet.
+   */
+  model: 'deepseek/deepseek-v4-flash-0731',
 
   /**
-   * Provider-routing, in te stellen bij Instellingen (B-61). Slugs van
-   * OpenRouter-providers, komma-gescheiden, in volgorde van voorkeur; altijd
-   * met `allow_fallbacks: false`, zodat OpenRouter niet ongemerkt naar een
-   * andere provider gaat. Leeg: OpenRouter kiest. Geldt niet bij een preset
-   * (`@preset/…`): die draagt zijn eigen routing.
+   * Provider-routing (B-61, B-D13): OpenRouter-providers in volgorde van
+   * voorkeur, komma-gescheiden, elk eventueel met kwantisatie als
+   * `provider/kwantisatie` — dezelfde tags als op de endpoints-pagina van
+   * OpenRouter (`deepinfra/fp8`, `decart/fp4`). Gaat ongewijzigd naar
+   * `provider.order`, altijd met `allow_fallbacks: false`. Leeg: OpenRouter
+   * kiest.
    *
-   * DeepInfra zonder kwantisatiefilter: DeepInfra serveert DeepSeek V4 Flash
-   * 0731 als fp8, en `fp4` erbij gaf nul endpoints (B-D06).
+   * `deepinfra` zonder kwantisatie, zoals de preset: DeepInfra serveert V4
+   * Flash 0731 als fp8, en `deepinfra/fp4` geeft nul endpoints (B-D06).
+   * Vastzetten op fp8 zou een verzoek laten mislukken zodra DeepInfra van
+   * kwantisatie wisselt.
    */
-  providerOrder: 'deepinfra',
-  providerQuantizations: '',
+  providerRouting: 'deepinfra',
 
   /**
    * Uitwijkroute (B-D11): als de primaire route na alle pogingen tijdelijk
-   * blijft weigeren (429/5xx). Standaard DeepSeek V4.1 Flash bij Decart in
-   * fp4, ook zonder verdere fallback. Zichtbaar en uit te zetten bij
-   * Instellingen, dus geen stille modelwissel.
+   * blijft weigeren (429/5xx). Zichtbaar en uit te zetten bij Instellingen,
+   * dus geen stille modelwissel.
    */
   fallbackEnabled: true,
   fallbackModel: 'deepseek/deepseek-v4.1-flash',
-  fallbackProviderOrder: 'decart',
-  fallbackQuantizations: 'fp4',
+  fallbackProviderRouting: 'decart/fp4',
 
   theme: 'system', // 'system' | 'light' | 'dark'
 

@@ -22,12 +22,12 @@ inspecteer je via de link *service worker* op diezelfde kaart.
 2. **Instellingen** → route op *Eigen API-key in deze browser*, plak je
    OpenRouter-key en sla op. Voor `openrouter.ai` is geen host-toestemming
    nodig: de API staat verzoeken vanuit de browser toe (CORS).
-3. Laat **Model** op `@preset/signaleringen` staan. Die preset zit in de
-   OpenRouter-workspace `signaleringen` en draagt de provider-routing
-   (`order: ["deepinfra"]`, `allow_fallbacks: false`). Met een eigen
-   OpenRouter-account bestaat die preset niet: vul dan een model-id in
-   (bijv. `deepseek/deepseek-v4-flash-0731`) en kies onder **Routing** de
-   provider(s), eventueel een kwantisatie, en de uitwijkroute.
+3. **Model** en **Routing** staan vooringevuld: `deepseek/deepseek-v4-flash-0731`
+   bij `deepinfra`, met als uitwijk `deepseek/deepseek-v4.1-flash` bij
+   `decart/fp4` (gelijk aan de preset `@preset/signaleringen`). Routing vul je
+   in als `provider` of `provider/kwantisatie`, in volgorde van voorkeur,
+   komma-gescheiden — dezelfde tags als op de endpoints-pagina van een model
+   bij OpenRouter. Een preset als model kan ook; dan geldt het routingveld niet.
 4. **Verbinding testen** en **Uitwijkroute testen** — horen `ok` terug te
    geven, met de provider die antwoordde. Testen slaat eerst op.
 5. **Profielen** → *Nieuw profiel*: naam, onderwerpomschrijving, eventueel een
@@ -250,7 +250,8 @@ Body en antwoord zijn ongewijzigd OpenAI-compatibel. De proxy hoeft alleen:
 
 De extensie stuurt zelf al `model` mee, plus — als het model géén preset is —
 een `provider`-blok uit de instellingen onder **Routing**, standaard
-`{"order":["deepinfra"],"allow_fallbacks":false}`.
+`{"order":["deepinfra"],"allow_fallbacks":false}`. De tags gaan ongewijzigd naar
+`order`; OpenRouter accepteert daar ook `provider/kwantisatie` (`deepinfra/fp8`).
 
 De voorfilter met Jev (zie hieronder) gebruikt een ander endpoint
 (`/api/alpha/decisions`) en werkt daarom niet via de proxy.
@@ -259,8 +260,8 @@ De voorfilter met Jev (zie hieronder) gebruikt een ander endpoint
 extensie elke aanroep tot 3 keer opnieuw (2 s, verdubbelend, maximaal 30 s;
 `Retry-After` gaat voor). Blijft de primaire route weigeren, dan wijkt ze uit
 naar `deepseek/deepseek-v4.1-flash` bij Decart in fp4
-(`{"order":["decart"],"quantizations":["fp4"],"allow_fallbacks":false}`), ook
-weer tot 3 keer. Model, provider(s) en kwantisatie van de uitwijkroute staan
+(`{"order":["decart/fp4"],"allow_fallbacks":false}`), ook
+weer tot 3 keer. Model en provider-routing van de uitwijkroute staan
 bij **Instellingen → Routing** en de uitwijk is daar uit te zetten; standaard
 zoals hierboven (`fallback*` in `DefaultSettings`).
 

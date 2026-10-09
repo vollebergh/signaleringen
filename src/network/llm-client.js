@@ -73,10 +73,10 @@ export function retryDelay(attempt, retryAfterMs = null) {
 const isTransient = (err) =>
   err instanceof TransientLlmError || err instanceof TypeError || err?.name === 'AbortError';
 
-/** Kwantisaties die OpenRouter kent als providerfilter. */
+/** Kwantisaties die OpenRouter kent; als achtervoegsel in een providertag. */
 export const QUANTIZATIONS = ['int4', 'int8', 'fp4', 'fp6', 'fp8', 'fp16', 'bf16', 'fp32', 'unknown'];
 
-/** "deepinfra, Decart" → ['deepinfra', 'decart']. Geëxporteerd voor de tests. */
+/** "deepinfra/fp8, Novita" → ['deepinfra/fp8', 'novita']. Geëxporteerd voor de tests. */
 export function parseList(value) {
   return String(value ?? '')
     .split(/[\s,]+/)
@@ -86,39 +86,40 @@ export function parseList(value) {
 
 /**
  * Controleert de routing-instellingen; geeft foutmeldingen terug, leeg als
- * alles klopt. Geëxporteerd voor de tests en het instellingenscherm.
+ * alles klopt. Elke tag is `provider` of `provider/kwantisatie`.
+ * Geëxporteerd voor de tests en het instellingenscherm.
  */
 export function validateRouting(settings) {
   const errors = [];
-  const slug = /^[a-z0-9][a-z0-9._/-]*$/;
-  const check = (label, providers, quantizations) => {
-    const badProvider = parseList(providers).filter((p) => !slug.test(p));
-    if (badProvider.length) errors.push(`${label}: onbekende schrijfwijze voor provider ${badProvider.join(', ')}`);
-    const badQuant = parseList(quantizations).filter((q) => !QUANTIZATIONS.includes(q));
-    if (badQuant.length) errors.push(`${label}: kwantisatie ${badQuant.join(', ')} bestaat niet (kies uit ${QUANTIZATIONS.join(', ')})`);
+  const check = (label, routing) => {
+    for (const tag of parseList(routing)) {
+      const [provider, quantization, ...rest] = tag.split('/');
+      if (!/^[a-z0-9][a-z0-9._-]*$/.test(provider) || rest.length > 0) {
+        errors.push(`${label}: "${tag}" is geen providertag (vorm: provider of provider/kwantisatie, bijv. deepinfra/fp8)`);
+      } else if (quantization !== undefined && !QUANTIZATIONS.includes(quantization)) {
+        errors.push(`${label}: kwantisatie "${quantization}" bestaat niet (kies uit ${QUANTIZATIONS.join(', ')})`);
+      }
+    }
   };
-  check('Provider', settings.providerOrder, settings.providerQuantizations);
+  if (!String(settings.model ?? '').trim()) errors.push('Model: vul een model in');
+  check('Provider-routing', settings.providerRouting);
   if (settings.fallbackEnabled) {
     if (!String(settings.fallbackModel ?? '').trim()) errors.push('Uitwijkroute: vul een model in, of zet de uitwijkroute uit');
-    check('Uitwijkroute', settings.fallbackProviderOrder, settings.fallbackQuantizations);
+    check('Uitwijkroute', settings.fallbackProviderRouting);
   }
   return errors;
 }
 
 /**
- * Het `provider`-blok voor OpenRouter: de providers in volgorde, eventueel
- * een kwantisatiefilter, en nooit uitwijken naar een niet-gekozen provider.
- * Zonder providers en kwantisatie: geen blok, OpenRouter kiest.
+ * Het `provider`-blok voor OpenRouter: de tags in volgorde, en nooit
+ * uitwijken naar een niet-gekozen provider. OpenRouter accepteert
+ * `provider/kwantisatie` rechtstreeks in `order` (gecontroleerd 2026-10-09:
+ * `deepinfra/fp8` → DeepInfra, `decart/fp4` → Decart, `deepinfra/fp4` → 404
+ * "No endpoints found"). Leeg: geen blok, OpenRouter kiest.
  */
-function providerRouting(order, quantizations) {
-  const providers = parseList(order);
-  const quants = parseList(quantizations);
-  if (providers.length === 0 && quants.length === 0) return null;
-  return {
-    ...(providers.length ? { order: providers } : {}),
-    ...(quants.length ? { quantizations: quants } : {}),
-    allow_fallbacks: false,
-  };
+function providerRouting(routing) {
+  const order = parseList(routing);
+  return order.length > 0 ? { order, allow_fallbacks: false } : null;
 }
 
 /**
@@ -129,7 +130,7 @@ function providerRouting(order, quantizations) {
 export function routesFor(settings) {
   const primary = {
     model: settings.model,
-    provider: usesPreset(settings.model) ? null : providerRouting(settings.providerOrder, settings.providerQuantizations),
+    provider: usesPreset(settings.model) ? null : providerRouting(settings.providerRouting),
   };
   const fallbackModel = String(settings.fallbackModel ?? '').trim();
   if (!settings.fallbackEnabled || !fallbackModel) return [primary];
@@ -139,7 +140,7 @@ export function routesFor(settings) {
       model: fallbackModel,
       provider: usesPreset(fallbackModel)
         ? null
-        : providerRouting(settings.fallbackProviderOrder, settings.fallbackQuantizations),
+        : providerRouting(settings.fallbackProviderRouting),
     },
   ];
 }

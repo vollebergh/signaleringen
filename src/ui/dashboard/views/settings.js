@@ -11,14 +11,6 @@ import { el, clear } from '../../shared/dom.js';
 import { originPattern } from '../../../background/permissions.js';
 import { QUANTIZATIONS, validateRouting } from '../../../network/llm-client.js';
 
-/**
- * Modelvoorstel. Alleen de preset: die draagt zijn eigen provider-routing
- * (`order: ["deepinfra"]`, `allow_fallbacks: false`) — zie
- * [[Referentie - OpenRouter workspace en provider-routing]]. Duurdere
- * modellen als voorstel aanbieden past niet bij een taak die zo vaak draait.
- */
-const MODEL_PRESETS = [{ label: 'OpenRouter-preset (aanbevolen)', value: '@preset/signaleringen' }];
-
 export async function renderSettings() {
   const [settings, vault] = await Promise.all([send(Msg.GET_SETTINGS), send(Msg.VAULT_STATUS)]);
   const root = el('div');
@@ -111,19 +103,17 @@ export async function renderSettings() {
     syncRouting();
   });
 
-  // ── Routing en uitwijkroute (B-61) ────────────────────────────────────────
-  // Wie een eigen OpenRouter-account gebruikt, heeft de preset niet en kiest
-  // hier zelf provider en uitwijk. Bij een preset gelden de providervelden
-  // niet: de preset draagt zijn eigen routing.
-  const providerOrder = input('text', draft.providerOrder, (v) => {
-    draft.providerOrder = v;
+  // ── Routing en uitwijkroute (B-61, B-D13) ─────────────────────────────────
+  // Eén veld per route: providers in volgorde, elk eventueel met kwantisatie
+  // (`deepinfra/fp8`). Bij een preset geldt het routingveld niet: de preset
+  // draagt zijn eigen routing.
+  const providerRouting = input('text', draft.providerRouting, (v) => {
+    draft.providerRouting = v;
   });
-  const providerQuantizations = input('text', draft.providerQuantizations, (v) => {
-    draft.providerQuantizations = v;
-  });
+  providerRouting.placeholder = 'bijv. deepinfra/fp8';
   const presetRoutingHint = el('div', {
     class: 'hint',
-    text: 'Je gebruikt een preset: die bepaalt zelf de provider, deze twee velden gelden dan niet.',
+    text: 'Je gebruikt een preset: die bepaalt zelf de provider, dit veld geldt dan niet.',
   });
 
   const fallbackCheckbox = el('input', { type: 'checkbox' });
@@ -132,16 +122,14 @@ export async function renderSettings() {
   const fallbackModel = input('text', draft.fallbackModel, (v) => {
     draft.fallbackModel = v;
   });
-  const fallbackProviderOrder = input('text', draft.fallbackProviderOrder, (v) => {
-    draft.fallbackProviderOrder = v;
+  fallbackModel.placeholder = 'bijv. deepseek/deepseek-v4.1-flash';
+  const fallbackProviderRouting = input('text', draft.fallbackProviderRouting, (v) => {
+    draft.fallbackProviderRouting = v;
   });
-  const fallbackQuantizations = input('text', draft.fallbackQuantizations, (v) => {
-    draft.fallbackQuantizations = v;
-  });
+  fallbackProviderRouting.placeholder = 'bijv. decart/fp4';
   const fallbackFields = el('div', {}, [
-    field('Model voor de uitwijk', fallbackModel, 'Bijv. deepseek/deepseek-v4.1-flash.'),
-    field('Provider(s) voor de uitwijk', fallbackProviderOrder, 'Bijv. decart.'),
-    field('Kwantisatie voor de uitwijk (optioneel)', fallbackQuantizations, 'Bijv. fp4.'),
+    field('Model voor de uitwijk', fallbackModel),
+    field('Provider-routing voor de uitwijk', fallbackProviderRouting, 'Zelfde vorm als hierboven.'),
   ]);
   fallbackCheckbox.addEventListener('change', () => {
     draft.fallbackEnabled = fallbackCheckbox.checked;
@@ -150,8 +138,7 @@ export async function renderSettings() {
 
   function syncRouting() {
     const preset = String(draft.model ?? '').includes('@preset/');
-    providerOrder.disabled = preset;
-    providerQuantizations.disabled = preset;
+    providerRouting.disabled = preset;
     presetRoutingHint.style.display = preset ? '' : 'none';
     fallbackFields.style.display = draft.fallbackEnabled ? '' : 'none';
   }
@@ -159,14 +146,9 @@ export async function renderSettings() {
 
   const routingSection = el('div', {}, [
     field(
-      'Provider(s)',
-      providerOrder,
-      'De provider(s) bij OpenRouter waar het model draait, in volgorde van voorkeur, komma-gescheiden — bijv. deepinfra. OpenRouter wijkt nooit uit naar een provider die hier niet staat. Leeg: OpenRouter kiest zelf.',
-    ),
-    field(
-      'Kwantisatie (optioneel)',
-      providerQuantizations,
-      `Alleen endpoints met deze precisie, bijv. fp8. Leeg: elke. Mogelijk: ${QUANTIZATIONS.join(', ')}. Let op: een combinatie die de provider niet aanbiedt, geeft bij elke aanroep een fout.`,
+      'Provider-routing',
+      providerRouting,
+      `Waar het model draait: provider of provider/kwantisatie, zoals op de endpoints-pagina van het model bij OpenRouter — bijv. deepinfra/fp8 of decart/fp4. Meerdere in volgorde van voorkeur, komma-gescheiden. OpenRouter wijkt nooit uit naar een provider die hier niet staat. Zonder kwantisatie: wat die provider serveert. Leeg: OpenRouter kiest zelf. Kwantisaties: ${QUANTIZATIONS.join(', ')}. Een combinatie die niet bestaat, geeft bij elke aanroep een fout — test na het invullen.`,
     ),
     presetRoutingHint,
     el('div', { class: 'field' }, [
@@ -181,21 +163,6 @@ export async function renderSettings() {
     ]),
     fallbackFields,
   ]);
-
-  const presetRow = el(
-    'div',
-    { class: 'actions', style: 'margin-bottom:8px' },
-    MODEL_PRESETS.map((preset) =>
-      el('button', {
-        text: preset.label,
-        onclick: () => {
-          draft.model = preset.value;
-          modelInput.value = preset.value;
-          syncRouting();
-        },
-      }),
-    ),
-  );
 
   // ── Automatisch synthetiseren ─────────────────────────────────────────────
   // Hoofdschakelaar. Het interval staat per profiel — verschillende onderwerpen
@@ -273,11 +240,10 @@ export async function renderSettings() {
     directFields,
 
     el('h3', { class: 'section-title', text: 'Model' }),
-    presetRow,
     field(
-      'Model of preset',
+      'Model',
       modelInput,
-      'Een preset (@preset/…) bestaat alleen in de OpenRouter-workspace signaleringen en draagt zijn eigen provider-routing. Met een eigen OpenRouter-account vul je een model-id in, bijv. deepseek/deepseek-v4-flash-0731, en kies je hieronder de provider.',
+      'Het model-id bij OpenRouter, bijv. deepseek/deepseek-v4-flash-0731. Kies een gedateerde variant, niet "latest", zodat het model niet ongemerkt verandert. Een preset (@preset/…) kan ook; die draagt dan zijn eigen routing.',
     ),
 
     el('h3', { class: 'section-title', text: 'Routing' }),
