@@ -12,10 +12,13 @@ export const AppConfig = {
   RSS_DESCRIPTION_MAX_CHARS: 300,
 
   // Publicatiefilter
-  PUBLICATION_AGE_DAYS: 7,
-  get PUBLICATION_AGE_MILLIS() {
-    return this.PUBLICATION_AGE_DAYS * 24 * 60 * 60 * 1000;
-  },
+  /**
+   * Terugkijktijd: hoe ver een scan terugkijkt naar publicaties. Per profiel
+   * in te stellen (`lookbackDays`, B-51); dit is de standaard voor nieuwe
+   * profielen. Een open.overheid-zoek-URL met een eigen periode gaat voor.
+   */
+  DEFAULT_LOOKBACK_DAYS: 7,
+  MAX_LOOKBACK_DAYS: 365,
 
   // Retry met exponential backoff
   MAX_RETRIES: 3,

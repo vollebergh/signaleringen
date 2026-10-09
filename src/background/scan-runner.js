@@ -22,6 +22,7 @@ import {
 } from '../network/llm-client.js';
 import { getSettings, isConfigured, missingConfigMessage, withApiKey } from '../data/settings-repository.js';
 import { getProfile } from '../data/profile-repository.js';
+import { normalizeLookbackDays } from '../core/models.js';
 import { saveScan, saveSynthesis, pruneOldScans } from '../data/scan-repository.js';
 import {
   dedupeKey,
@@ -122,7 +123,9 @@ async function executeScan(profileId, options) {
 
   try {
     // ── 1. Bronnen ophalen ────────────────────────────────────────────────
-    const since = Date.now() - AppConfig.PUBLICATION_AGE_MILLIS;
+    // Terugkijktijd per profiel (B-51).
+    const lookbackDays = normalizeLookbackDays(profile.lookbackDays);
+    const since = Date.now() - lookbackDays * 24 * 60 * 60 * 1000;
     const seen = await loadSeen(profileId);
 
     const fetched = []; // { publication, key, isNew, seenRecord }
@@ -196,6 +199,7 @@ async function executeScan(profileId, options) {
         sourceStatuses,
         scannedSourceIds: sources.map((s) => s.id),
         onlyNewPublications: profile.onlyNewPublications,
+        lookbackDays,
       };
       await saveScan(scan, []);
       await pruneOldScans(profileId);
@@ -346,6 +350,7 @@ async function executeScan(profileId, options) {
       sourceStatuses,
       scannedSourceIds: sources.map((s) => s.id),
       onlyNewPublications: profile.onlyNewPublications,
+      lookbackDays,
     };
     await saveScan(scan, results);
 

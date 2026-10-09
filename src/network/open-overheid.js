@@ -10,8 +10,8 @@
  * De API is niet gedocumenteerd — alles hieronder is waargenomen gedrag
  * (2026-09-26). Zie "Referentie - open.overheid.nl zoek-API" in de vault.
  * Periode: kiest de gebruiker op de site een periode ("Afgelopen jaar", of
- * zelf datums), dan geldt die (`periodFromSiteUrl`). Anders het ophaalvenster
- * van de extensie.
+ * zelf datums), dan geldt die (`periodFromSiteUrl`). Anders de terugkijktijd
+ * van het profiel (B-51).
  *
  * Valkuilen die hier worden afgevangen:
  *   - filterwaarden moeten dubbel URL-gecodeerd en komma-gescheiden zijn;
@@ -301,7 +301,7 @@ export async function fetchOpenOverheid(source, since) {
   const publications = [];
   const max = since > 0 ? AppConfig.OPEN_OVERHEID_MAX_RESULTS : PAGE_SIZE;
 
-  // Een periode uit de URL gaat voor het ophaalvenster, behalve bij "Testen"
+  // Een periode uit de URL gaat voor de terugkijktijd van het profiel, behalve bij "Testen"
   // (since 0), dat alleen één pagina en het totaal wil zien.
   const period = since > 0 ? periodFromSiteUrl(source.url) : null;
   const range = period ? { since: period.since, until: period.until } : { since, until: null };

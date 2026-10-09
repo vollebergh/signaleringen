@@ -760,3 +760,19 @@ test('originsForSources: open.overheid vraagt ook officielebekendmakingen.nl, RS
     ['https://open.overheid.nl/*', FULLTEXT_ORIGIN],
   );
 });
+
+// ── Terugkijktijd per profiel (B-51) ────────────────────────────────────────
+
+import { normalizeLookbackDays } from '../src/core/models.js';
+
+test('terugkijktijd: standaard 7 dagen, hele dagen, begrensd', () => {
+  assert.equal(createProfile({}).lookbackDays, AppConfig.DEFAULT_LOOKBACK_DAYS);
+  assert.equal(AppConfig.DEFAULT_LOOKBACK_DAYS, 7);
+  assert.equal(createProfile({ lookbackDays: 30 }).lookbackDays, 30);
+  assert.equal(normalizeLookbackDays('14'), 14);
+  assert.equal(normalizeLookbackDays(2.6), 3);
+  assert.equal(normalizeLookbackDays(0), AppConfig.DEFAULT_LOOKBACK_DAYS);
+  assert.equal(normalizeLookbackDays(''), AppConfig.DEFAULT_LOOKBACK_DAYS);
+  assert.equal(normalizeLookbackDays('abc'), AppConfig.DEFAULT_LOOKBACK_DAYS);
+  assert.equal(normalizeLookbackDays(10_000), AppConfig.MAX_LOOKBACK_DAYS);
+});

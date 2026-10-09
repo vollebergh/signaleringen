@@ -36,6 +36,9 @@ export async function renderScan(profileId, scanId) {
     el('div', { class: 'scan-meta' }, [
       el('span', { class: 'badge', text: formatDateTime(scan.scanDate) }),
       el('span', { class: 'badge', text: `${scan.totalFetched} opgehaald` }),
+      scan.lookbackDays
+        ? el('span', { class: 'badge', title: 'Terugkijktijd van het profiel bij deze scan', text: `${scan.lookbackDays} dagen terug` })
+        : null,
       el('span', { class: 'badge', text: `${scan.newCount ?? 0} nieuw` }),
       el('span', { class: 'badge ok', text: `${relevant.length} relevant` }),
       possible.length > 0 ? el('span', { class: 'badge', text: `${possible.length} mogelijk` }) : null,

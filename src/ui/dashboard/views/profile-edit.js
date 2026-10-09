@@ -6,7 +6,7 @@
 
 import { AppConfig } from '../../../core/config.js';
 import { Msg, send } from '../../../core/messages.js';
-import { createProfile, createSource, SourceType, validateSourceUrl } from '../../../core/models.js';
+import { createProfile, createSource, normalizeLookbackDays, SourceType, validateSourceUrl } from '../../../core/models.js';
 import { el, clear, formatDateTime, openUrl } from '../../shared/dom.js';
 import { missingOf, originsForSources } from '../../../background/permissions.js';
 import { FULLTEXT_ORIGIN, isOpenOverheidSearchUrl } from '../../../network/open-overheid.js';
@@ -106,6 +106,30 @@ export async function renderProfileEdit(profileId) {
     el('div', {
       class: 'hint',
       text: 'Aan: publicaties die dit profiel eerder al ophaalde worden overgeslagen bij het beoordelen en synthetiseren. Uit: elke scan beoordeelt alles opnieuw — meer tokens, maar bruikbaar als je de vraagstelling hebt gewijzigd.',
+    }),
+  ]);
+
+  // Terugkijktijd per profiel (B-51).
+  const lookbackInput = el('input', {
+    type: 'number',
+    min: '1',
+    max: String(AppConfig.MAX_LOOKBACK_DAYS),
+    step: '1',
+    value: String(draft.lookbackDays),
+    style: 'width:6em',
+  });
+  lookbackInput.addEventListener('input', () => {
+    draft.lookbackDays = normalizeLookbackDays(lookbackInput.value);
+  });
+  lookbackInput.addEventListener('change', () => {
+    lookbackInput.value = String(draft.lookbackDays);
+  });
+  const lookbackField = el('div', { class: 'field' }, [
+    el('label', { text: 'Terugkijktijd' }),
+    el('div', { class: 'row' }, [lookbackInput, el('span', { text: 'dagen' })]),
+    el('div', {
+      class: 'hint',
+      text: `Bij elke scan haalt de extensie publicaties op van de afgelopen zoveel dagen (1–${AppConfig.MAX_LOOKBACK_DAYS}, standaard ${AppConfig.DEFAULT_LOOKBACK_DAYS}). Langer terugkijken mist minder als je een tijd niet hebt gescand; met "Alleen nieuwe publicaties beoordelen" kost dat weinig extra, want wat al eerder langskwam, gaat niet opnieuw naar het model. Een open.overheid-zoek-URL met een eigen periode (bijv. "Afgelopen jaar") gaat voor.`,
     }),
   ]);
 
@@ -239,7 +263,7 @@ export async function renderProfileEdit(profileId) {
     }
     const openOverheidHint = el('div', {
       class: 'hint',
-      text: 'Stel de zoekopdracht samen op open.overheid.nl (Uitgebreid zoeken: ministerie, documentsoort, eventueel een zoekterm) en plak de URL uit de adresbalk. Kies je op de site een periode (bijv. "Afgelopen jaar"), dan haalt de extensie die hele periode op, tot maximaal 200 publicaties; "afgelopen jaar" schuift mee. Zonder periode geldt het ophaalvenster van de extensie (7 dagen).',
+      text: 'Stel de zoekopdracht samen op open.overheid.nl (Uitgebreid zoeken: ministerie, documentsoort, eventueel een zoekterm) en plak de URL uit de adresbalk. Kies je op de site een periode (bijv. "Afgelopen jaar"), dan haalt de extensie die hele periode op, tot maximaal 200 publicaties; "afgelopen jaar" schuift mee. Zonder periode geldt de terugkijktijd van dit profiel.',
     });
     syncType();
 
@@ -419,6 +443,7 @@ export async function renderProfileEdit(profileId) {
     categoryField,
     queryField,
     synthesisField,
+    lookbackField,
     onlyNewField,
     autoField,
     el('div', { class: 'row-between section-title' }, [

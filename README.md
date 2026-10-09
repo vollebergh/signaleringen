@@ -99,13 +99,22 @@ Optioneel, pas gevraagd bij het aanzetten van de betreffende functie:
 | --- | --- |
 | `alarms` | Automatisch synthetiseren op een interval |
 
+## Terugkijktijd
+
+Per profiel stel je bij *Bewerken* in hoeveel dagen een scan terugkijkt
+(1–365, standaard 7). Wie een tijd niet scant, zet hem ruimer om niets te
+missen; met *Alleen nieuwe publicaties beoordelen* kost dat weinig extra,
+want wat al eerder langskwam, gaat niet opnieuw naar het model. Een
+open.overheid-zoek-URL met een eigen periode gaat voor. Het scanresultaat
+toont met welke terugkijktijd gescand is.
+
 ## Bronnen
 
 Drie soorten, te kiezen per bron bij *Bewerken*:
 
 | Type | Wat de extensie ophaalt |
 | --- | --- |
-| **RSS/Atom** | De items uit de feed, binnen het ophaalvenster |
+| **RSS/Atom** | De items uit de feed, binnen de terugkijktijd van het profiel |
 | **Webpagina** | De leesbare tekst van de pagina, als één publicatie |
 | **open.overheid.nl** | Een zoekopdracht op open.overheid.nl: Kamerbrieven, rapporten, Woo-stukken |
 
@@ -115,8 +124,7 @@ een zoekterm kiezen. Plak daarna de URL uit de adresbalk als bron; de extensie
 herkent hem en zet het type zelf goed. Kies je op de site een periode, dan
 haalt de extensie die hele periode op, tot maximaal 200 publicaties per scan:
 "Afgelopen week/maand/jaar" schuift mee met de datum, een zelfgekozen periode
-geldt letterlijk. Zonder periode geldt het ophaalvenster van de extensie
-(7 dagen). Sortering en paginering uit de URL worden genegeerd.
+geldt letterlijk. Zonder periode geldt de terugkijktijd van het profiel. Sortering en paginering uit de URL worden genegeerd.
 
 **Publicaties zonder fragment.** De zoek-API geeft bij een deel van de
 treffers geen tekstfragment rond de zoekterm, alleen titel en een

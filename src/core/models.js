@@ -39,6 +39,16 @@ export function createSource(partial = {}) {
   };
 }
 
+/**
+ * Terugkijktijd in hele dagen, 1 tot en met het maximum; iets anders wordt de
+ * standaard.
+ */
+export function normalizeLookbackDays(value) {
+  const days = Math.round(Number(value));
+  if (!Number.isFinite(days) || days < 1) return AppConfig.DEFAULT_LOOKBACK_DAYS;
+  return Math.min(days, AppConfig.MAX_LOOKBACK_DAYS);
+}
+
 /** @returns {Profile} */
 export function createProfile(partial = {}) {
   return {
@@ -50,6 +60,9 @@ export function createProfile(partial = {}) {
     // Standaard alleen publicaties beoordelen die dit profiel nog niet zag.
     // Scheelt tokens en maakt "nieuw" in de resultaten betekenisvol.
     onlyNewPublications: partial.onlyNewPublications ?? true,
+    // Hoe ver een scan terugkijkt, in dagen (B-51). Ook voor profielen uit
+    // een export van vóór dit veld: dan de standaard.
+    lookbackDays: normalizeLookbackDays(partial.lookbackDays),
     // Periodiek automatisch scannen en synthetiseren. Werkt alleen als de
     // hoofdschakelaar in de instellingen aan staat; het interval is per profiel.
     autoScanEnabled: partial.autoScanEnabled ?? false,
