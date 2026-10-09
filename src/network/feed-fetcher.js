@@ -40,18 +40,70 @@ async function fetchBody(source) {
       : { error: Result.error(message) };
   }
 
-  const text = await response.text();
+  const text = decodeBody(new Uint8Array(await response.arrayBuffer()), response.headers.get('content-type'));
   if (!text) {
     return { error: Result.error(`Lege response voor ${source.name || source.url}`) };
   }
-  return { text };
+  return { text, finalUrl: response.url || source.url };
+}
+
+/**
+ * Decodeert de response met de juiste tekenset (B-66). `response.text()` gaat
+ * altijd uit van UTF-8, terwijl een feed in bijv. ISO-8859-1 of windows-1252
+ * dat in de `Content-Type` of de XML-declaratie aangeeft. Volgorde: header,
+ * dan declaratie, dan UTF-8.
+ */
+export function decodeBody(bytes, contentType) {
+  const head = new TextDecoder('latin1').decode(bytes.subarray(0, 200));
+  const charset =
+    /charset=["']?([\w.:-]+)/i.exec(contentType ?? '')?.[1] ??
+    /<\?xml[^>]*encoding=["']([\w.:-]+)["']/i.exec(head)?.[1] ??
+    'utf-8';
+  try {
+    return new TextDecoder(charset).decode(bytes);
+  } catch {
+    return new TextDecoder('utf-8').decode(bytes); // onbekende tekenset
+  }
+}
+
+/** Begint het document als RSS, RSS 1.0 (RDF) of Atom? */
+export function looksLikeFeed(text) {
+  const start = text.slice(0, 4000).replace(/<\?[\s\S]*?\?>|<!--[\s\S]*?-->|<!DOCTYPE[^>]*>/gi, '').trimStart();
+  return /^<(?:[\w-]+:)?(?:rss|feed|RDF)\b/i.test(start);
+}
+
+/**
+ * Het eerste feedadres dat een webpagina aankondigt
+ * (`<link rel="alternate" type="application/rss+xml" href="…">`), of null.
+ */
+export function discoverFeedUrl(html, pageUrl) {
+  for (const [tag] of html.matchAll(/<link\b[^>]*>/gi)) {
+    if (!/rel=["']?alternate/i.test(tag) || !/(rss|atom)\+xml/i.test(tag)) continue;
+    const href = /href=["']([^"']+)["']/i.exec(tag)?.[1];
+    if (!href) continue;
+    try {
+      return new URL(decodeEntities(href), pageUrl).href;
+    } catch {
+      /* volgende proberen */
+    }
+  }
+  return null;
 }
 
 async function fetchRss(source, since) {
   try {
-    const { text, error } = await fetchBody(source);
+    const { text, finalUrl, error } = await fetchBody(source);
     if (error) return error;
-    return Result.success(parseFeed(text, source.name, since));
+    // Een webpagina als RSS-bron gaf eerder stil 0 publicaties (B-66).
+    if (!looksLikeFeed(text)) {
+      const feedUrl = discoverFeedUrl(text, finalUrl);
+      return Result.error(
+        feedUrl
+          ? `${source.name || source.url} is een webpagina, geen feed. De pagina noemt deze feed: ${feedUrl}`
+          : `${source.name || source.url} is een webpagina, geen RSS- of Atom-feed. Gebruik het feedadres, of kies het type Webpagina.`,
+      );
+    }
+    return Result.success(parseFeed(text, source.name, since, finalUrl));
   } catch (err) {
     return classifyFetchError(err, source.name || source.url);
   }
@@ -91,103 +143,136 @@ export function stripHtml(html) {
 }
 
 /**
- * Parseert RSS 2.0 (`<item>`) en Atom (`<entry>`) in één doorloop.
+ * Velden van een item/entry, per elementnaam (zonder prefix). Tekst wordt
+ * verzameld tot het element sluit, ook over geneste elementen en meerdere
+ * tekst- of CDATA-stukken heen (B-66: Atom `content type="xhtml"` heeft een
+ * `<div>` erin). Per veld telt het eerste niet-lege element.
+ */
+const ENTRY_FIELDS = {
+  title: 'title',
+  description: 'description',
+  summary: 'description',
+  content: 'description',
+  encoded: 'description',
+  link: 'link',
+  guid: 'guid',
+  id: 'guid',
+  pubDate: 'published',
+  pubdate: 'published',
+  published: 'published',
+  updated: 'published',
+  date: 'published',
+  issued: 'published',
+};
+
+/** Blokelementen in xhtml-inhoud: daartussen een spatie, anders plakken alinea's aan elkaar. */
+const BLOCK_ELEMENTS = new Set(['p', 'div', 'br', 'li', 'ul', 'ol', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'tr', 'td', 'blockquote']);
+
+/** Prefixen waarvan de elementen geen eigen velden van het item zijn. */
+const IGNORED_PREFIXES = new Set(['media', 'itunes', 'georss', 'slash', 'wfw', 'sy']);
+
+/**
+ * Parseert RSS 2.0, RSS 1.0 (`<item>`) en Atom (`<entry>`) in één doorloop.
+ * @param {string} [baseUrl] adres van de feed, om relatieve links op te lossen
  * @returns {import('../core/models.js').Publication[]}
  */
-export function parseFeed(xml, sourceName, since) {
+export function parseFeed(xml, sourceName, since, baseUrl) {
   const publications = [];
 
   let inEntry = false;
-  let currentTag = '';
-  let title = '';
-  let description = '';
-  let link = '';
-  let published = '';
-
-  const reset = () => {
-    title = '';
-    description = '';
-    link = '';
-    published = '';
-  };
+  let fields = {};
+  let guidIsPermaLink = true;
+  // Het veld dat nu tekst verzamelt, met diepte voor geneste elementen.
+  let capture = null; // { field, name, depth, text }
 
   parseXml(xml, {
-    onStart(name, attrs) {
-      currentTag = name;
+    onStart(name, attrs, rawName) {
       if (name === 'item' || name === 'entry') {
         inEntry = true;
-        reset();
+        fields = {};
+        guidIsPermaLink = true;
+        capture = null;
         return;
       }
-      // Atom zet de URL in het href-attribuut; alternate heeft voorrang op self.
-      if (inEntry && name === 'link' && attrs.href) {
-        const rel = attrs.rel ?? 'alternate';
-        if (rel === 'alternate' || !link) link = attrs.href;
+      if (!inEntry) return;
+      if (capture) {
+        capture.depth += 1;
+        if (BLOCK_ELEMENTS.has(name)) capture.text += ' ';
+        return;
       }
+
+      const prefix = rawName.includes(':') ? rawName.slice(0, rawName.indexOf(':')) : '';
+      // Behalve media:description: YouTube zet de omschrijving alleen daar.
+      if (IGNORED_PREFIXES.has(prefix) && !(prefix === 'media' && name === 'description')) return;
+
+      // Atom zet de URL in het href-attribuut; alternate heeft voorrang.
+      if (name === 'link' && attrs.href) {
+        const rel = attrs.rel ?? 'alternate';
+        if (rel === 'alternate' && !fields.alternate) fields.alternate = attrs.href;
+        else if (!fields.otherLink) fields.otherLink = attrs.href;
+        return;
+      }
+      if (name === 'guid' && attrs.ispermalink === 'false') guidIsPermaLink = false;
+
+      const field = ENTRY_FIELDS[name];
+      if (field && !fields[field]) capture = { field, name, depth: 0, text: '' };
     },
 
     onText(text) {
-      if (!inEntry) return;
-      const value = text.trim();
-      if (!value) return;
-
-      switch (currentTag) {
-        case 'title':
-          if (!title) title = value;
-          break;
-        case 'description':
-        case 'summary':
-        case 'content':
-        case 'encoded':
-          if (!description) description = value;
-          break;
-        case 'link':
-          if (!link) link = value;
-          break;
-        case 'pubDate':
-        case 'pubdate':
-        case 'published':
-        case 'updated':
-        case 'date':
-          if (!published) published = value;
-          break;
-        default:
-          break;
-      }
+      if (capture) capture.text += text;
     },
 
     onEnd(name) {
-      if (name !== 'item' && name !== 'entry') {
-        currentTag = '';
+      if (capture) {
+        if (capture.depth > 0) {
+          capture.depth -= 1;
+          if (BLOCK_ELEMENTS.has(name)) capture.text += ' ';
+          return;
+        }
+        if (name === capture.name) {
+          const value = capture.text.trim();
+          if (value && !fields[capture.field]) fields[capture.field] = value;
+          capture = null;
+        }
         return;
       }
+      if (name !== 'item' && name !== 'entry') return;
       inEntry = false;
-      currentTag = '';
 
-      const cleanDescription = truncate(
-        stripHtml(description),
-        AppConfig.RSS_DESCRIPTION_MAX_CHARS,
-      );
-      const publishedDate = parseDate(published);
-
+      const publishedDate = parseDate(fields.published);
       // Een onparseerbare datum (0) laten we door: liever te veel aanbieden aan
       // het model dan een publicatie missen omdat de feed een raar formaat heeft.
-      if (publishedDate === 0 || publishedDate >= since) {
-        publications.push(
-          createPublication({
-            title: stripHtml(title),
-            description: cleanDescription,
-            url: link,
-            publishedDate,
-            sourceName,
-          }),
-        );
-      }
+      if (publishedDate !== 0 && publishedDate < since) return;
+
+      // Geen link? Dan een guid die een URL is (RSS zonder <link>).
+      const guidUrl = guidIsPermaLink && /^https?:\/\//i.test(fields.guid ?? '') ? fields.guid : '';
+      const link = fields.alternate ?? fields.link ?? fields.otherLink ?? guidUrl;
+
+      publications.push(
+        createPublication({
+          title: stripHtml(fields.title ?? ''),
+          description: truncate(stripHtml(fields.description ?? ''), AppConfig.RSS_DESCRIPTION_MAX_CHARS),
+          url: resolveUrl(link, baseUrl),
+          publishedDate,
+          sourceName,
+        }),
+      );
     },
   });
 
   log.debug(`Feed '${sourceName}': ${publications.length} publicaties na datumfilter`);
   return publications;
+}
+
+/** Relatieve link → absoluut, ten opzichte van het feedadres (B-66). */
+function resolveUrl(link, baseUrl) {
+  const value = (link ?? '').trim();
+  if (!value || !baseUrl) return value;
+  try {
+    return new URL(value, baseUrl).href;
+  } catch {
+    return value;
+  }
 }
 
 function truncate(text, max) {

@@ -118,6 +118,14 @@ Drie soorten, te kiezen per bron bij *Bewerken*:
 | **Webpagina** | De leesbare tekst van de pagina, als één publicatie |
 | **open.overheid.nl** | Een zoekopdracht op open.overheid.nl: Kamerbrieven, rapporten, Woo-stukken |
 
+**Feedadres vinden.** Gebruik het adres van de feed zelf, niet de homepage.
+Vaak werkt `<site>/rss`, `<site>/rss.xml` of `<site>/feed/`, of de nieuwspagina
+in plaats van de homepage. Geef je toch een webpagina op als RSS-bron, dan
+meldt de extensie dat, met het feedadres erbij als de pagina er een noemt.
+Sommige feeds (Volkskrant, Trouw, grotendeels CBS) geven alleen titels; het
+model beoordeelt dan op de titel. Geteste feeds en hun adressen: *Referentie -
+RSS-feeds in de praktijk* in de vault.
+
 Een zoekopdracht op open.overheid.nl stel je samen op de site zelf: zoeken, dan
 *Uitgebreid zoeken* openklappen en ministeries, documentsoorten en eventueel
 een zoekterm kiezen. Plak daarna de URL uit de adresbalk als bron; de extensie

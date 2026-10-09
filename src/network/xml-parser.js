@@ -19,6 +19,17 @@ const NAMED_ENTITIES = {
   quot: '"',
   apos: "'",
   nbsp: ' ',
+  // HTML-entities die in beschrijvingen van feeds voorkomen (B-66): vaak
+  // dubbel gecodeerd (`&amp;rsquo;`), dus pas zichtbaar na het strippen van HTML.
+  lsquo: '‘', rsquo: '’', sbquo: '‚', ldquo: '“', rdquo: '”', bdquo: '„',
+  laquo: '«', raquo: '»', ndash: '–', mdash: '—', hellip: '…', bull: '•',
+  middot: '·', euro: '€', copy: '©', reg: '®', trade: '™', deg: '°', shy: '',
+  eacute: 'é', egrave: 'è', ecirc: 'ê', euml: 'ë', aacute: 'á', agrave: 'à',
+  acirc: 'â', auml: 'ä', iacute: 'í', igrave: 'ì', icirc: 'î', iuml: 'ï',
+  oacute: 'ó', ograve: 'ò', ocirc: 'ô', ouml: 'ö', uacute: 'ú', ugrave: 'ù',
+  ucirc: 'û', uuml: 'ü', ccedil: 'ç', ntilde: 'ñ', szlig: 'ß', oslash: 'ø',
+  aring: 'å', aelig: 'æ',
+  Eacute: 'É', Euml: 'Ë', Ouml: 'Ö', Uuml: 'Ü', Auml: 'Ä', Iuml: 'Ï',
 };
 
 /** Vervangt XML- en de meest voorkomende HTML-entities door hun teken. */
@@ -36,7 +47,8 @@ export function decodeEntities(text) {
         return match;
       }
     }
-    const named = NAMED_ENTITIES[entity.toLowerCase()];
+    // Eerst hoofdlettergevoelig (`&Eacute;` ≠ `&eacute;`), dan ongevoelig.
+    const named = NAMED_ENTITIES[entity] ?? NAMED_ENTITIES[entity.toLowerCase()];
     return named ?? match;
   });
 }

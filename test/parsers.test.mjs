@@ -866,3 +866,79 @@ test('routesFor: lokaal model zonder routing en zonder uitwijkroute', () => {
   });
   assert.deepEqual(routes, [{ model: 'qwen2.5:3b', provider: null }]);
 });
+
+// ── B-66: feeds uit de praktijk ─────────────────────────────────────────────
+
+import { decodeBody, looksLikeFeed, discoverFeedUrl } from '../src/network/feed-fetcher.js';
+
+test('parseFeed: HTML-entities, ook dubbel gecodeerd, worden leesbaar', () => {
+  const xml = `<rss><channel><item><title>Caf&amp;eacute; &amp;rsquo;t Hoekje</title>
+    <description>&lt;p&gt;Eerste&amp;nbsp;zin &amp;hellip; &amp;ldquo;quote&amp;rdquo; &amp;#8217;s&lt;/p&gt;</description>
+    <link>https://example.nl/a</link></item></channel></rss>`;
+  const [item] = parseFeed(xml, 'Bron', 0);
+  assert.equal(item.title, 'Café ’t Hoekje');
+  assert.equal(item.description, 'Eerste zin … “quote” ’s');
+});
+
+test('parseFeed: relatieve links worden absoluut, guid is reserve-link', () => {
+  const xml = `<rss><channel>
+    <item><title>Relatief</title><link>/nieuws/1</link></item>
+    <item><title>Alleen guid</title><guid>https://example.nl/nieuws/2</guid></item>
+    <item><title>Guid geen permalink</title><guid isPermaLink="false">https://example.nl/x</guid></item>
+  </channel></rss>`;
+  const items = parseFeed(xml, 'Bron', 0, 'https://example.nl/feed.xml');
+  assert.deepEqual(items.map((i) => i.url), ['https://example.nl/nieuws/1', 'https://example.nl/nieuws/2', '']);
+});
+
+test('parseFeed: Atom xhtml-content, tekst in stukken en media:title', () => {
+  const xml = `<feed xmlns="http://www.w3.org/2005/Atom"><entry>
+    <media:group><media:title>Niet deze titel</media:title></media:group>
+    <title type="html">Deel &lt;b&gt;een&lt;/b&gt; <![CDATA[en twee]]></title>
+    <link rel="enclosure" href="https://example.nl/a.mp3"/>
+    <link rel="alternate" href="https://example.nl/artikel"/>
+    <updated>2026-10-09T10:00:00Z</updated>
+    <content type="xhtml"><div xmlns="http://www.w3.org/1999/xhtml"><p>Alinea <em>een</em>.</p><p>Alinea twee.</p></div></content>
+  </entry></feed>`;
+  const [item] = parseFeed(xml, 'Bron', 0);
+  assert.equal(item.title, 'Deel een en twee');
+  assert.equal(item.url, 'https://example.nl/artikel');
+  assert.equal(item.description, 'Alinea een. Alinea twee.');
+  assert.equal(item.publishedDate, Date.parse('2026-10-09T10:00:00Z'));
+});
+
+test('parseFeed: RSS 1.0 (RDF) met dc:date', () => {
+  const xml = `<rdf:RDF xmlns:rdf="x" xmlns="y" xmlns:dc="z"><channel><title>Kanaal</title></channel>
+    <item rdf:about="https://example.nl/1"><title>RDF-item</title><link>https://example.nl/1</link>
+    <dc:date>2026-10-01T08:00:00+02:00</dc:date></item></rdf:RDF>`;
+  const [item] = parseFeed(xml, 'Bron', 0);
+  assert.equal(item.title, 'RDF-item');
+  assert.equal(item.publishedDate, Date.parse('2026-10-01T06:00:00Z'));
+});
+
+test('decodeBody: tekenset uit de header of de XML-declaratie, anders UTF-8', () => {
+  const latin = Uint8Array.from([...'<?xml version="1.0" encoding="windows-1252"?><t>'].map((c) => c.charCodeAt(0)).concat([0x63, 0x61, 0x66, 0xe9, 0x20, 0x93, 0x78, 0x94]));
+  assert.match(decodeBody(latin, 'application/xml'), /café “x”/);
+  const iso = Uint8Array.from([0x63, 0x61, 0x66, 0xe9]);
+  assert.equal(decodeBody(iso, 'text/xml; charset=ISO-8859-1'), 'café');
+  const utf8 = new TextEncoder().encode('<rss>café</rss>');
+  assert.equal(decodeBody(utf8, null), '<rss>café</rss>');
+  assert.equal(decodeBody(utf8, 'text/xml; charset=onzin'), '<rss>café</rss>');
+});
+
+test('looksLikeFeed en discoverFeedUrl: webpagina herkennen en feed voorstellen', () => {
+  assert.equal(looksLikeFeed('<?xml version="1.0"?>\n<!-- x --><rss version="2.0">'), true);
+  assert.equal(looksLikeFeed('<feed xmlns="http://www.w3.org/2005/Atom">'), true);
+  assert.equal(looksLikeFeed('<?xml version="1.0"?><rdf:RDF xmlns:rdf="x">'), true);
+  assert.equal(looksLikeFeed('<!DOCTYPE html><html><head>'), false);
+  const html = `<html><head><link rel="stylesheet" href="/a.css">
+    <link rel="alternate" type="application/rss+xml" title="Nieuws" href="/nieuws/feed/?a=1&amp;b=2"></head></html>`;
+  assert.equal(discoverFeedUrl(html, 'https://example.nl/nieuws/'), 'https://example.nl/nieuws/feed/?a=1&b=2');
+  assert.equal(discoverFeedUrl('<html></html>', 'https://example.nl/'), null);
+});
+
+test('parseFeed: media:description als enige omschrijving (YouTube)', () => {
+  const xml = `<feed><entry><title>Video</title><link rel="alternate" href="https://youtube.com/watch?v=1"/>
+    <media:group><media:title>Video</media:title><media:description>Over de video.</media:description></media:group>
+  </entry></feed>`;
+  assert.equal(parseFeed(xml, 'Bron', 0)[0].description, 'Over de video.');
+});
