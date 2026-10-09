@@ -35,8 +35,15 @@ async function init() {
   });
 
   $('#open-panel').addEventListener('click', () => {
-    if (currentWindowId === null) return;
-    chrome.sidePanel.open({ windowId: currentWindowId });
+    // Firefox kent geen side panel maar een sidebar (B-65). Beide eisen een
+    // gebruikersgebaar, dus geen `await` vóór de aanroep.
+    const sidebar = globalThis.browser?.sidebarAction;
+    if (!chrome.sidePanel && sidebar) {
+      sidebar.open().catch(() => {});
+    } else {
+      if (currentWindowId === null) return;
+      chrome.sidePanel.open({ windowId: currentWindowId });
+    }
     window.close();
   });
 

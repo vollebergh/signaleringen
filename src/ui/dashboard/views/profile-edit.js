@@ -338,9 +338,12 @@ export async function renderProfileEdit(profileId) {
     // dus die vragen we eerst, vanuit deze klik (een gebruikersgebaar).
     // Bij open.overheid in hetzelfde verzoek ook officielebekendmakingen.nl,
     // voor de volledige tekst van publicaties zonder fragment (B-60).
-    const missingForSource = await missingOf(originsForSources([source]));
-    if (missingForSource.length > 0) {
-      const granted = await chrome.permissions.request({ origins: missingForSource });
+    // Meteen vragen, zonder eerst te controleren: Firefox weigert een
+    // toestemmingsvraag na een eerdere `await` in de klik (B-65). Al gegeven
+    // toestemming levert geen nieuwe vraag op.
+    const neededForSource = originsForSources([source]);
+    if (neededForSource.length > 0) {
+      const granted = await chrome.permissions.request({ origins: neededForSource });
       if (!granted) {
         output.textContent = 'Geen toestemming voor deze host';
         output.className = 'error';

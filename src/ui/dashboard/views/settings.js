@@ -259,13 +259,20 @@ export async function renderSettings() {
     // Toestemming vragen vanuit deze klik; een `await` ervoor zou het
     // gebruikersgebaar verspelen dat de browser voor de prompt eist.
     if (autoCheckbox.checked) {
-      const granted = await chrome.permissions.request({ permissions: ['alarms'] });
+      let granted;
+      try {
+        granted = await chrome.permissions.request({ permissions: ['alarms'] });
+      } catch {
+        granted = null; // Firefox kent `alarms` niet als optionele permissie (B-65)
+      }
       if (!granted) {
         autoCheckbox.checked = false;
         draft.autoScanEnabled = false;
         autoStatus.className = 'hint error';
         autoStatus.textContent =
-          'Zonder de permissie voor achtergrondtaken kan de extensie niet zelf scannen.';
+          granted === null
+            ? 'Deze browser kan de permissie voor achtergrondtaken niet los toekennen; automatisch scannen is hier niet beschikbaar.'
+            : 'Zonder de permissie voor achtergrondtaken kan de extensie niet zelf scannen.';
         return;
       }
     }
@@ -381,7 +388,9 @@ export async function renderSettings() {
           : isLocalBaseUrl(draft.directBaseUrl) ? draft.directBaseUrl.trim() : '';
       if (ownHost) {
         const origin = originPattern(ownHost);
-        if (origin && !(await chrome.permissions.contains({ origins: [origin] }))) {
+        // Meteen vragen: Firefox weigert een toestemmingsvraag na een eerdere
+        // `await` in de klik (B-65); al gegeven toestemming vraagt niets.
+        if (origin) {
           const granted = await chrome.permissions.request({ origins: [origin] });
           if (!granted) {
             status.className = 'error';

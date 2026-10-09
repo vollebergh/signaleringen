@@ -16,6 +16,21 @@ in de Obsidian-vault.
 Na een codewijziging: **Opnieuw laden** op de extensiekaart. De service worker
 inspecteer je via de link *service worker* op diezelfde kaart.
 
+**Chrome** werkt op dezelfde manier via `chrome://extensions` (Chrome 121 of
+nieuwer). Edge en Chrome melden dat ze `sidebar_action` en
+`browser_specific_settings` niet kennen; die sleutels zijn voor Firefox en
+kunnen geen kwaad.
+
+**Firefox** (128 of nieuwer): `about:debugging#/runtime/this-firefox` →
+**Tijdelijke add-on laden** → kies `manifest.json`. Een tijdelijke add-on
+verdwijnt bij het afsluiten van Firefox. Verschillen met Edge:
+
+- Het zijpaneel heet in Firefox de *sidebar*. De knop in de popup opent die.
+- Firefox staat `alarms` niet toe als optionele permissie. Automatisch
+  synthetiseren is daar daarom niet beschikbaar; Instellingen meldt dat.
+- Host-toestemming vraag je net als in Edge per bron; Firefox toont daarvoor
+  een eigen venster.
+
 ## Eerste configuratie
 
 1. Open het dashboard (pictogram → **Dashboard**, of via `edge://extensions` → Opties)

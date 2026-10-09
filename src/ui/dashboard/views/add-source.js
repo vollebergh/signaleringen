@@ -7,7 +7,7 @@
 import { Msg, send } from '../../../core/messages.js';
 import { SourceType, validateSourceUrl } from '../../../core/models.js';
 import { el, clear } from '../../shared/dom.js';
-import { missingOf, originsForSources } from '../../../background/permissions.js';
+import { originsForSources } from '../../../background/permissions.js';
 import { isOpenOverheidSearchUrl } from '../../../network/open-overheid.js';
 
 export async function renderAddSource() {
@@ -93,9 +93,11 @@ export async function renderAddSource() {
 
     // Toestemming vragen vanuit deze klik; daarna pas opslaan. Bij
     // open.overheid in hetzelfde verzoek ook officielebekendmakingen.nl (B-60).
-    const missing = await missingOf(originsForSources([{ url, type: typeSelect.value }]));
-    if (missing.length > 0) {
-      const granted = await chrome.permissions.request({ origins: missing });
+    // Meteen vragen, zonder eerst te controleren: Firefox weigert een
+    // toestemmingsvraag na een eerdere `await` in de klik (B-65).
+    const needed = originsForSources([{ url, type: typeSelect.value }]);
+    if (needed.length > 0) {
+      const granted = await chrome.permissions.request({ origins: needed });
       if (!granted) {
         status.className = 'error';
         status.textContent = 'Zonder toestemming voor deze host kan de bron niet worden opgehaald.';
