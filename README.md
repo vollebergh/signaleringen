@@ -124,12 +124,14 @@ standaardomschrijving ("Brief regering"). Komt zo'n publicatie van
 officielebekendmakingen.nl (Kamerstukken, Kamervragen, moties), dan haalt de
 scan daar de volledige tekst op en zet de passage(s) rond de zoekterm achter
 de beschrijving, vóór de voorfilter en de relevantiestap. Alleen voor wat
-beoordeeld wordt, 4 tegelijk, tot 100 per scan. Geen treffer in de tekst
-(bijvoorbeeld een bijlage waarvan de inhoud in een PDF staat): de beschrijving
-blijft zoals ze was. Zonder toestemming voor de host gaat de scan gewoon door
+beoordeeld wordt, 4 tegelijk, tot 100 per scan. Kamerstukken (`kst-`) en
+Kamervragen met antwoord (`ah-`) staan daar met de hele documenttekst; bijlagen
+(`blg-`) alleen als PDF, die slaat de extensie over. Geen treffer in de tekst:
+de beschrijving blijft zoals ze was. Zonder toestemming voor de host gaat de scan gewoon door
 en biedt het scanresultaat een knop *Toegang geven* aan. Gemeten op het
-additionaliteitsprofiel: 20 van 51 aangevuld in 12 s; 17 daarvan bleken
-relevant, waar het model ze zonder tekst op 5–30 had gezet.
+additionaliteitsprofiel: 20 van 20 Kamerstukken en Kamervragen aangevuld in
+4 s; 17 daarvan bleken relevant, waar het model ze zonder tekst op 5–30 had
+gezet.
 
 Tips voor een profiel over een beleidsdossier:
 

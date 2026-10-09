@@ -742,9 +742,11 @@ test('mapResults: zonder fragment en met weblocatie bij officielebekendmakingen.
       { document: { titel: 'A', pid: 'https://open.overheid.nl/documenten/a', weblocatie: 'http://zoek.officielebekendmakingen.nl/kst-1.html' } },
       { document: { titel: 'B', pid: 'https://open.overheid.nl/documenten/b', weblocatie: 'https://zoek.officielebekendmakingen.nl/kst-2.html' }, highlightedText: 'met <b>fragment</b>' },
       { document: { titel: 'C', pid: 'https://open.overheid.nl/documenten/c' } },
+      { document: { titel: 'D', pid: 'https://open.overheid.nl/documenten/d', weblocatie: 'https://zoek.officielebekendmakingen.nl/blg-1270810.html' } },
     ],
   };
-  const [a, b, c] = mapOpenOverheid(json, 'Bron', ['stikstof']);
+  const [a, b, c, d] = mapOpenOverheid(json, 'Bron', ['stikstof']);
+  assert.equal(d.fullTextUrl, undefined, 'bijlage: alleen PDF, geen webversie');
   assert.equal(a.fullTextUrl, 'https://zoek.officielebekendmakingen.nl/kst-1.html');
   assert.deepEqual(a.fullTextTerms, ['stikstof']);
   assert.equal(b.fullTextUrl, undefined);

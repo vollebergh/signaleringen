@@ -165,11 +165,16 @@ export function mapResults(json, sourceName, terms = []) {
     .filter((pub) => pub.title && pub.url);
 }
 
-/** De weblocatie als https-URL op officielebekendmakingen.nl, of null. */
+/**
+ * De weblocatie als https-URL op officielebekendmakingen.nl, of null.
+ * Bijlagen (`blg-…`) slaan we over: die pagina is een stub ("niet beschikbaar
+ * als Webversie"), de inhoud staat alleen in een PDF. Kamerstukken (`kst-`) en
+ * Aanhangsels (`ah-`, Kamervragen met antwoord) hebben de hele tekst.
+ */
 function fullTextUrlFor(weblocatie) {
   try {
     const url = new URL(weblocatie);
-    if (url.hostname !== FULLTEXT_HOST) return null;
+    if (url.hostname !== FULLTEXT_HOST || url.pathname.startsWith('/blg-')) return null;
     url.protocol = 'https:';
     return url.href;
   } catch {
