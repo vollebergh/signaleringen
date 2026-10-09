@@ -5,7 +5,7 @@
  */
 
 import { Msg, send } from '../../core/messages.js';
-import { $, el, clear, applyTheme, formatDateTime, showError } from '../shared/dom.js';
+import { $, el, clear, applyTheme, formatDateTime, showError, progressLabel, explainScanFailure } from '../shared/dom.js';
 
 const content = $('#content');
 
@@ -151,9 +151,10 @@ async function profileCard(profile) {
 
   // Laatste resultaat tonen zodat de popup ook zonder nieuwe scan nut heeft.
   try {
-    const [latest, synthesis] = await Promise.all([
+    const [latest, synthesis, scanState] = await Promise.all([
       send(Msg.GET_LATEST_SCAN, { profileId: profile.id }),
       send(Msg.GET_LATEST_SYNTHESIS, { profileId: profile.id }),
+      send(Msg.GET_SCAN_STATE, { profileId: profile.id }),
     ]);
 
     if (latest) {
@@ -175,12 +176,30 @@ async function profileCard(profile) {
         }),
       );
     }
+
+    // Loopt er al een scan, of is de vorige afgebroken (B-46)?
+    const scanButton = card.querySelector('button.primary[data-profile-id]');
+    if (scanState.isScanning) {
+      startScan(profile.id, scanButton, progressLabel(scanState) ?? undefined); // haakt aan bij de lopende scan
+    } else if (scanState.phase === 'interrupted') {
+      showInterrupted(profile.id, status, scanState.message, scanButton);
+    }
   } catch (err) {
     status.textContent = err.message;
     status.classList.add('error');
   }
 
   return card;
+}
+
+/** Afgebroken scan: melding plus een knop om opnieuw te scannen. */
+function showInterrupted(profileId, status, message, scanButton) {
+  clear(status);
+  status.classList.add('error');
+  status.append(
+    el('span', { text: `${message} ` }),
+    el('button', { class: 'icon', text: 'Opnieuw scannen', onclick: () => startScan(profileId, scanButton) }),
+  );
 }
 
 function openDashboard(hash) {
@@ -192,13 +211,17 @@ const openSyntheses = (profileId) => openDashboard(`#profiel/${profileId}/signal
 const openScan = (profileId, scanId) =>
   openDashboard(`#profiel/${profileId}/scan/${scanId}`);
 
-async function startScan(profileId, button) {
+/**
+ * Start een scan, of haakt aan bij de lopende: de worker geeft dan diezelfde
+ * run terug.
+ */
+async function startScan(profileId, button, initialLabel = 'Scan gestart…') {
   const status = statusNodes.get(profileId);
   button.disabled = true;
   if (status) {
     clear(status);
     status.classList.remove('error');
-    status.append(el('span', { class: 'spinner' }), el('span', { text: ' Scan gestart…' }));
+    status.append(el('span', { class: 'spinner' }), el('span', { text: ` ${initialLabel}` }));
   }
 
   try {
@@ -216,9 +239,14 @@ async function startScan(profileId, button) {
     }
   } catch (err) {
     if (status) {
-      clear(status);
-      status.classList.add('error');
-      status.textContent = err.message;
+      const message = await explainScanFailure(profileId, err);
+      if (err.workerStopped) {
+        showInterrupted(profileId, status, message, button);
+      } else {
+        clear(status);
+        status.classList.add('error');
+        status.textContent = message;
+      }
     }
   } finally {
     button.disabled = false;
@@ -228,17 +256,11 @@ async function startScan(profileId, button) {
 // Voortgangsberichten uit de service worker.
 chrome.runtime.onMessage.addListener((message) => {
   if (message?.type !== Msg.SCAN_PROGRESS) return;
-  const { profileId, phase } = message.payload;
+  const { profileId } = message.payload;
   const status = statusNodes.get(profileId);
   if (!status) return;
 
-  const label = {
-    fetching: `Bronnen ophalen (${message.payload.current}/${message.payload.total})…`,
-    fulltext: `Tekst ophalen (${message.payload.done}/${message.payload.total})…`,
-    prefiltering: `Voorfilteren (${message.payload.total})…`,
-    analyzing: `Beoordelen (${message.payload.done}/${message.payload.total})…`,
-    synthesizing: 'Signalering opstellen…',
-  }[phase];
+  const label = progressLabel(message.payload);
 
   if (label) {
     clear(status);

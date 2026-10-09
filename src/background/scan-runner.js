@@ -1,7 +1,7 @@
 /**
  * Orkestreert één scan: bronnen ophalen → nieuw bepalen → relevantie filteren
- * → synthetiseren → opslaan. Draait uitsluitend op verzoek van de gebruiker;
- * er is geen achtergrondplanning.
+ * → synthetiseren → opslaan. Op verzoek van de gebruiker, of via de planner
+ * als automatisch synthetiseren aan staat.
  *
  * De extensie houdt per profiel bij welke publicaties eerder langskwamen en
  * welke daarvan al in een signalering zijn verwerkt. Dat bepaalt wat er als
@@ -11,7 +11,6 @@
 
 import { AppConfig } from '../core/config.js';
 import { Result } from '../core/result.js';
-import { Msg } from '../core/messages.js';
 import { log } from '../core/logger.js';
 import { fetchPublications } from '../network/feed-fetcher.js';
 import {
@@ -35,27 +34,23 @@ import { withKeepalive } from './keepalive.js';
 import { hasPermissionFor, missingOrigins } from './permissions.js';
 import { FULLTEXT_ORIGIN, enrichWithFullText } from '../network/open-overheid.js';
 
-/** Scans die op dit moment lopen, per profiel-id. Voorkomt dubbel werk. */
+import { setProgress, getProgress, recoverInterruptedScans } from './scan-progress.js';
+
+/**
+ * Scans die in déze worker lopen, per profiel-id. Voorkomt dubbel werk. Staat
+ * bewust in geheugen: sterft de worker, dan loopt de scan ook niet meer.
+ */
 const running = new Map();
 
-/** Laatst bekende voortgang per profiel, zodat een heropende popup bijraakt. */
-const progress = new Map();
-
-export function getProgress(profileId) {
-  return progress.get(profileId) ?? { phase: 'idle' };
-}
+export { getProgress };
 
 export function isScanning(profileId) {
   return running.has(profileId);
 }
 
-function setProgress(profileId, state) {
-  progress.set(profileId, state);
-  // Broadcast naar open UI-vlakken. Faalt stil als er niets luistert.
-  chrome.runtime
-    .sendMessage({ type: Msg.SCAN_PROGRESS, payload: { profileId, ...state } })
-    .catch(() => {});
-}
+// Bij het laden van de worker: een scan die volgens de sessieopslag nog liep,
+// is met de vorige worker meegestorven (B-46).
+recoverInterruptedScans(isScanning).catch((err) => log.warn('Afgebroken scans nalopen mislukt', err));
 
 /**
  * Start een scan of geeft de lopende terug.
@@ -70,6 +65,7 @@ export function runScan(profileId, options = {}) {
     return existing;
   }
 
+  setProgress(profileId, { phase: 'starting' });
   const run = withKeepalive(() => executeScan(profileId, options)).finally(() => {
     running.delete(profileId);
   });

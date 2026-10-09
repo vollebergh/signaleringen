@@ -168,8 +168,8 @@ const handlers = {
 
   [Msg.START_SCAN]: ({ profileId, sourceIds }) => runScan(profileId, { sourceIds }),
 
-  [Msg.GET_SCAN_STATE]: ({ profileId }) => ({
-    ...getProgress(profileId),
+  [Msg.GET_SCAN_STATE]: async ({ profileId }) => ({
+    ...(await getProgress(profileId)),
     isScanning: isScanning(profileId),
   }),
 

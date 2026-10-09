@@ -52,7 +52,19 @@ export const Msg = Object.freeze({
 
 /** Verstuurt een bericht naar de service worker en gooit bij een foutantwoord. */
 export async function send(type, payload = {}) {
-  const response = await chrome.runtime.sendMessage({ type, payload });
+  let response;
+  try {
+    response = await chrome.runtime.sendMessage({ type, payload });
+  } catch (err) {
+    // Stopt de worker terwijl hij nog moet antwoorden, dan sluit Edge het
+    // kanaal met een kale Engelse fout (B-46).
+    if (/message (channel|port) closed/i.test(err?.message ?? '')) {
+      const stopped = new Error('De achtergrondservice van de extensie stopte voordat er antwoord kwam.');
+      stopped.workerStopped = true;
+      throw stopped;
+    }
+    throw err;
+  }
   if (!response) {
     throw new Error('Geen antwoord van de achtergrondservice');
   }

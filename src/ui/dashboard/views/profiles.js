@@ -4,7 +4,7 @@
  */
 
 import { Msg, send } from '../../../core/messages.js';
-import { el, clear, formatDateTime } from '../../shared/dom.js';
+import { el, clear, formatDateTime, progressLabel, explainScanFailure } from '../../shared/dom.js';
 
 export async function renderProfileList() {
   const profiles = await send(Msg.LIST_PROFILES);
@@ -94,6 +94,11 @@ function profileCard(profile) {
     title: 'Laden…',
   });
 
+  const scanButton = el('button', {
+    text: 'Scan nu',
+    onclick: () => runScan(profile.id, scanButton, status),
+  });
+
   const card = el('div', { class: 'profile-card' }, [
     el('div', { class: 'title-row' }, [
       el('h2', { text: profile.name || '(naamloos)' }),
@@ -112,10 +117,7 @@ function profileCard(profile) {
     status,
     el('div', { class: 'actions' }, [
       readButton,
-      el('button', {
-        text: 'Scan nu',
-        onclick: (event) => runScan(profile.id, event.currentTarget, status),
-      }),
+      scanButton,
       el('button', {
         text: 'Alle signaleringen',
         onclick: () => {
@@ -156,8 +158,9 @@ function profileCard(profile) {
   Promise.all([
     send(Msg.GET_LATEST_SCAN, { profileId: profile.id }),
     send(Msg.GET_LATEST_SYNTHESIS, { profileId: profile.id }),
+    send(Msg.GET_SCAN_STATE, { profileId: profile.id }),
   ])
-    .then(([latest, synthesis]) => {
+    .then(([latest, synthesis, scanState]) => {
       clear(status);
 
       if (synthesis) {
@@ -168,6 +171,16 @@ function profileCard(profile) {
         });
       } else {
         readButton.title = 'Nog geen signalering — draai eerst een scan';
+      }
+
+      // Loopt er al een scan, of is de vorige afgebroken (B-46)?
+      if (scanState.isScanning) {
+        runScan(profile.id, scanButton, status, progressLabel(scanState, { withSource: true }) ?? undefined);
+        return;
+      }
+      if (scanState.phase === 'interrupted') {
+        showInterrupted(profile.id, scanButton, status, scanState.message);
+        return;
       }
 
       if (!latest) {
@@ -217,22 +230,29 @@ export function formatInterval(minutes) {
   return parts.join(' ');
 }
 
-async function runScan(profileId, button, status) {
+/** Afgebroken scan: melding plus een knop om opnieuw te scannen. */
+function showInterrupted(profileId, button, status, message) {
+  clear(status);
+  status.classList.add('error');
+  status.append(
+    el('span', { text: `${message} ` }),
+    el('button', { class: 'icon', text: 'Opnieuw scannen', onclick: () => runScan(profileId, button, status) }),
+  );
+}
+
+/**
+ * Start een scan, of haakt aan bij de lopende: de worker geeft dan diezelfde
+ * run terug.
+ */
+async function runScan(profileId, button, status, initialLabel = 'Scan gestart…') {
   button.disabled = true;
   clear(status);
   status.classList.remove('error');
-  status.append(el('span', { class: 'spinner' }), el('span', { text: ' Scan gestart…' }));
+  status.append(el('span', { class: 'spinner' }), el('span', { text: ` ${initialLabel}` }));
 
   const onProgress = (message) => {
     if (message?.type !== Msg.SCAN_PROGRESS || message.payload.profileId !== profileId) return;
-    const p = message.payload;
-    const label = {
-      fetching: `Bronnen ophalen (${p.current}/${p.total}) — ${p.sourceName ?? ''}`,
-      fulltext: `Tekst ophalen (${p.done}/${p.total})…`,
-      prefiltering: `Voorfilteren (${p.total})…`,
-      analyzing: `Beoordelen (${p.done}/${p.total})…`,
-      synthesizing: 'Signalering opstellen…',
-    }[p.phase];
+    const label = progressLabel(message.payload, { withSource: true });
     if (!label) return;
     clear(status);
     status.append(el('span', { class: 'spinner' }), el('span', { text: ` ${label}` }));
@@ -254,9 +274,14 @@ async function runScan(profileId, button, status) {
       }),
     );
   } catch (err) {
-    clear(status);
-    status.classList.add('error');
-    status.textContent = err.message;
+    const message = await explainScanFailure(profileId, err);
+    if (err.workerStopped) {
+      showInterrupted(profileId, button, status, message);
+    } else {
+      clear(status);
+      status.classList.add('error');
+      status.textContent = message;
+    }
   } finally {
     chrome.runtime.onMessage.removeListener(onProgress);
     button.disabled = false;

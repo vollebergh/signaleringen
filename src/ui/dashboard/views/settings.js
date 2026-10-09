@@ -7,7 +7,7 @@
  */
 
 import { Msg, send } from '../../../core/messages.js';
-import { el, clear } from '../../shared/dom.js';
+import { el, clear, labelRow } from '../../shared/dom.js';
 import { originPattern } from '../../../background/permissions.js';
 import { QUANTIZATIONS, validateRouting } from '../../../network/llm-client.js';
 
@@ -134,14 +134,14 @@ export async function renderSettings() {
   }
 
   const prefilterField = el('div', { class: 'field' }, [
-    el('label', { class: 'row', style: 'color:var(--text)' }, [
-      prefilterCheckbox,
-      el('span', { text: 'Voorfilter met een beslismodel vóór de relevantiestap' }),
-    ]),
-    el('div', {
-      class: 'hint',
-      text: 'Snellere filtering bij profielen met veel bronnen: een beslismodel (standaard Jev van TypeSafe) zeeft de te beoordelen publicaties eerst ruim, en alleen wat overblijft beoordeelt het taalmodel. Bij vervolgscans met weinig nieuwe publicaties scheelt het weinig. Lukt de voorfilter niet, dan gaat alles gewoon naar het taalmodel.',
-    }),
+    labelRow(
+      el('label', { class: 'row', style: 'color:var(--text)' }, [
+        prefilterCheckbox,
+        el('span', { text: 'Voorfilter met een beslismodel vóór de relevantiestap' }),
+      ]),
+      'Snellere filtering bij profielen met veel bronnen: een beslismodel (standaard Jev van TypeSafe) zeeft de te beoordelen publicaties eerst ruim, en alleen wat overblijft beoordeelt het taalmodel. Bij vervolgscans met weinig nieuwe publicaties scheelt het weinig. Lukt de voorfilter niet, dan gaat alles gewoon naar het taalmodel.',
+    ),
+    // De privacywaarschuwing blijft zichtbaar: die hoort niet achter een hover.
     el('div', {
       class: 'hint',
       text: 'Let op: met dit vinkje aan gaan titels en tekstfragmenten van publicaties, en de gebruikersvraag van het profiel, ook naar de aanbieder van dat model (bij Jev: TypeSafe, via OpenRouter).',
@@ -215,14 +215,13 @@ export async function renderSettings() {
     ),
     presetRoutingHint,
     el('div', { class: 'field' }, [
-      el('label', { class: 'row', style: 'color:var(--text)' }, [
-        fallbackCheckbox,
-        el('span', { text: 'Uitwijkroute gebruiken' }),
-      ]),
-      el('div', {
-        class: 'hint',
-        text: 'Blijft de route hierboven na drie pogingen bezet (429) of storen (5xx), dan probeert de extensie deze route, ook drie keer. Een scan mislukt pas als ook die weigert.',
-      }),
+      labelRow(
+        el('label', { class: 'row', style: 'color:var(--text)' }, [
+          fallbackCheckbox,
+          el('span', { text: 'Uitwijkroute gebruiken' }),
+        ]),
+        'Blijft de route hierboven na drie pogingen bezet (429) of storen (5xx), dan probeert de extensie deze route, ook drie keer. Een scan mislukt pas als ook die weigert.',
+      ),
     ]),
     fallbackFields,
   ]);
@@ -246,7 +245,7 @@ export async function renderSettings() {
     const granted = await chrome.permissions.contains({ permissions: ['alarms'] });
     autoStatus.className = granted ? 'hint' : 'hint error';
     autoStatus.textContent = granted
-      ? 'Aan: profielen waarbij je dit hebt ingeschakeld worden op hun eigen interval gescand en gesynthetiseerd. De extensie controleert elk kwartier wie aan de beurt is. Stel het interval per profiel in bij Bewerken.'
+      ? 'Aan: profielen waarbij je dit hebt ingeschakeld worden op hun eigen interval gescand en gesynthetiseerd.'
       : 'De permissie voor achtergrondtaken is nog niet verleend — sla op om die te vragen.';
   };
 
@@ -269,15 +268,14 @@ export async function renderSettings() {
   });
 
   const autoField = el('div', { class: 'field' }, [
-    el('label', { class: 'row', style: 'color:var(--text)' }, [
-      autoCheckbox,
-      el('span', { text: 'Profielen automatisch scannen en synthetiseren' }),
-    ]),
+    labelRow(
+      el('label', { class: 'row', style: 'color:var(--text)' }, [
+        autoCheckbox,
+        el('span', { text: 'Profielen automatisch scannen en synthetiseren' }),
+      ]),
+      'Dit vraagt de optionele permissie voor achtergrondtaken. Zolang deze schakelaar uit staat, gebruikt de extensie die permissie niet en scant ze nooit uit zichzelf. Aan: de extensie controleert elk kwartier welk profiel aan de beurt is; het interval stel je per profiel in bij Bewerken.',
+    ),
     autoStatus,
-    el('div', {
-      class: 'hint',
-      text: 'Dit vraagt de optionele permissie voor achtergrondtaken. Zolang deze schakelaar uit staat, gebruikt de extensie die permissie niet en scant ze nooit uit zichzelf.',
-    }),
   ]);
   refreshAutoStatus();
 
@@ -489,11 +487,8 @@ function input(type, value, onChange) {
   return node;
 }
 
+/** Veld met label; de toelichting staat achter een info-knopje. */
 function field(label, control, hint) {
-  return el('div', { class: 'field' }, [
-    el('label', { text: label }),
-    control,
-    hint ? el('div', { class: 'hint', text: hint }) : null,
-  ]);
+  return el('div', { class: 'field' }, [labelRow(el('label', { text: label }), hint), control]);
 }
 

@@ -32,6 +32,68 @@ export function el(tag, props = {}, children = []) {
   return node;
 }
 
+/**
+ * Info-knopje met toelichting die bij hover of toetsenbordfocus verschijnt.
+ * Puur CSS (`.info-tip` in theme.css); de tekst staat in de DOM, zodat een
+ * schermlezer hem via `aria-describedby` voorleest.
+ */
+let infoTipCounter = 0;
+export function infoTip(text) {
+  const id = `info-tip-${++infoTipCounter}`;
+  return el('span', { class: 'info-tip', tabindex: '0', role: 'button', 'aria-label': 'Toelichting', 'aria-describedby': id }, [
+    el('span', { class: 'info-tip-icon', 'aria-hidden': 'true', text: 'i' }),
+    el('span', { class: 'info-tip-text', role: 'tooltip', id, text }),
+  ]);
+}
+
+/** Label met optioneel info-knopje erachter, buiten het `<label>` zodat een klik erop niets aanvinkt. */
+export function labelRow(label, hint) {
+  return el('div', { class: 'label-row' }, [label, hint ? infoTip(hint) : null]);
+}
+
+/**
+ * Tekst bij een voortgangsbericht van een scan, of null als de fase niet
+ * "bezig" is.
+ * @param {object} p voortgang uit SCAN_PROGRESS of GET_SCAN_STATE
+ * @param {{ withSource?: boolean }} [options] bronnaam tonen bij het ophalen
+ */
+export function progressLabel(p, { withSource = false } = {}) {
+  switch (p?.phase) {
+    case 'starting':
+      return 'Scan gestart…';
+    case 'fetching':
+      return withSource
+        ? `Bronnen ophalen (${p.current}/${p.total}) — ${p.sourceName ?? ''}`
+        : `Bronnen ophalen (${p.current}/${p.total})…`;
+    case 'fulltext':
+      return `Tekst ophalen (${p.done}/${p.total})…`;
+    case 'prefiltering':
+      return `Voorfilteren (${p.total})…`;
+    case 'analyzing':
+      return `Beoordelen (${p.done}/${p.total})…`;
+    case 'synthesizing':
+      return 'Signalering opstellen…';
+    default:
+      return null;
+  }
+}
+
+/**
+ * Vraagt de scanstatus op nadat START_SCAN zonder antwoord bleef omdat de
+ * worker stopte. Het verzoek wekt de worker, die de scan dan als afgebroken
+ * markeert (B-46). Geeft de foutmelding die de UI moet tonen.
+ */
+export async function explainScanFailure(profileId, error) {
+  if (!error?.workerStopped) return error?.message ?? String(error);
+  try {
+    const state = await send(Msg.GET_SCAN_STATE, { profileId });
+    if (state.phase === 'interrupted') return state.message;
+  } catch {
+    /* val terug op de oorspronkelijke melding */
+  }
+  return error.message;
+}
+
 export function clear(node) {
   while (node.firstChild) node.removeChild(node.firstChild);
 }
