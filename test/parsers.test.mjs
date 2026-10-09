@@ -436,20 +436,44 @@ test('retryDelay groeit exponentieel, volgt Retry-After en blijft onder het plaf
 
 // ── Uitwijkroute (B-D11) ─────────────────────────────────────────────────────
 
-import { routesFor } from '../src/network/llm-client.js';
+import { routesFor, validateRouting, parseList } from '../src/network/llm-client.js';
 
-test('routesFor: preset krijgt de Decart-uitwijk, een eigen model niet', () => {
-  const preset = routesFor({ model: '@preset/signaleringen' });
+test('routesFor: routing en uitwijk uit de instellingen; preset zonder provider-blok', () => {
+  const preset = routesFor(DefaultSettings);
   assert.equal(preset.length, 2);
   assert.equal(preset[0].provider, null);
   assert.equal(preset[1].model, 'deepseek/deepseek-v4.1-flash');
   assert.deepEqual(preset[1].provider, { order: ['decart'], quantizations: ['fp4'], allow_fallbacks: false });
 
-  const bare = routesFor({ model: 'deepseek/deepseek-v4-flash-0731' });
+  const bare = routesFor({ ...DefaultSettings, model: 'deepseek/deepseek-v4-flash-0731' });
   assert.deepEqual(bare[0].provider, { order: ['deepinfra'], allow_fallbacks: false });
-  assert.equal(bare.length, 2);
 
-  assert.equal(routesFor({ model: 'anthropic/claude-haiku-4.5' }).length, 1);
+  const own = routesFor({
+    ...DefaultSettings,
+    model: 'deepseek/deepseek-v4-flash-0731',
+    providerOrder: ' DeepInfra, novita ',
+    providerQuantizations: 'fp8',
+    fallbackEnabled: false,
+  });
+  assert.equal(own.length, 1);
+  assert.deepEqual(own[0].provider, { order: ['deepinfra', 'novita'], quantizations: ['fp8'], allow_fallbacks: false });
+
+  const open = routesFor({ ...DefaultSettings, model: 'x/y', providerOrder: '', fallbackModel: '  ' });
+  assert.equal(open[0].provider, null, 'leeg: OpenRouter kiest');
+  assert.equal(open.length, 1, 'uitwijk zonder model telt niet');
+});
+
+test('validateRouting: onbekende kwantisatie, rare providernaam of uitwijk zonder model', () => {
+  assert.deepEqual(validateRouting(DefaultSettings), []);
+  const errors = validateRouting({
+    ...DefaultSettings,
+    providerOrder: 'deep infra!',
+    providerQuantizations: 'fp5',
+    fallbackModel: '',
+  });
+  assert.equal(errors.length, 3);
+  assert.deepEqual(validateRouting({ ...DefaultSettings, fallbackEnabled: false, fallbackModel: '' }), []);
+  assert.deepEqual(parseList('a, B  c,,'), ['a', 'b', 'c']);
 });
 
 // ── Periode uit de open.overheid-URL ─────────────────────────────────────────

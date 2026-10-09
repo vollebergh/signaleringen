@@ -15,23 +15,6 @@ import { AppConfig } from '../core/config.js';
 import { log } from '../core/logger.js';
 import { fetchWithTimeout, isTransientStatus } from './http.js';
 
-/**
- * Provider-routing voor OpenRouter: uitsluitend DeepInfra, geen fallback.
- *
- * Bewust géén `quantizations`-filter. DeepInfra serveert DeepSeek V4 Flash 0731
- * als fp8, niet fp4 (gecontroleerd 2026-08-15 via `/models/…/endpoints`); de
- * aanname `deepinfra/fp4` uit besluit B-D06 klopt niet voor dit model. Beide
- * tegelijk vastzetten levert nul beschikbare endpoints en dus een harde fout
- * bij elk verzoek.
- *
- * Wordt overgeslagen zodra het model een preset is (`@preset/...`) — dan zit
- * de routing al in de preset.
- */
-const PROVIDER_ROUTING = {
-  order: ['deepinfra'],
-  allow_fallbacks: false,
-};
-
 function usesPreset(model) {
   return typeof model === 'string' && model.includes('@preset/');
 }
@@ -90,17 +73,75 @@ export function retryDelay(attempt, retryAfterMs = null) {
 const isTransient = (err) =>
   err instanceof TransientLlmError || err instanceof TypeError || err?.name === 'AbortError';
 
+/** Kwantisaties die OpenRouter kent als providerfilter. */
+export const QUANTIZATIONS = ['int4', 'int8', 'fp4', 'fp6', 'fp8', 'fp16', 'bf16', 'fp32', 'unknown'];
+
+/** "deepinfra, Decart" → ['deepinfra', 'decart']. Geëxporteerd voor de tests. */
+export function parseList(value) {
+  return String(value ?? '')
+    .split(/[\s,]+/)
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+}
+
 /**
- * De routes die na elkaar geprobeerd worden: de ingestelde (preset of kaal
- * model met DeepInfra-routing), en voor de standaardmodellen daarna de
- * uitwijkroute uit AppConfig. Geëxporteerd voor de tests.
+ * Controleert de routing-instellingen; geeft foutmeldingen terug, leeg als
+ * alles klopt. Geëxporteerd voor de tests en het instellingenscherm.
+ */
+export function validateRouting(settings) {
+  const errors = [];
+  const slug = /^[a-z0-9][a-z0-9._/-]*$/;
+  const check = (label, providers, quantizations) => {
+    const badProvider = parseList(providers).filter((p) => !slug.test(p));
+    if (badProvider.length) errors.push(`${label}: onbekende schrijfwijze voor provider ${badProvider.join(', ')}`);
+    const badQuant = parseList(quantizations).filter((q) => !QUANTIZATIONS.includes(q));
+    if (badQuant.length) errors.push(`${label}: kwantisatie ${badQuant.join(', ')} bestaat niet (kies uit ${QUANTIZATIONS.join(', ')})`);
+  };
+  check('Provider', settings.providerOrder, settings.providerQuantizations);
+  if (settings.fallbackEnabled) {
+    if (!String(settings.fallbackModel ?? '').trim()) errors.push('Uitwijkroute: vul een model in, of zet de uitwijkroute uit');
+    check('Uitwijkroute', settings.fallbackProviderOrder, settings.fallbackQuantizations);
+  }
+  return errors;
+}
+
+/**
+ * Het `provider`-blok voor OpenRouter: de providers in volgorde, eventueel
+ * een kwantisatiefilter, en nooit uitwijken naar een niet-gekozen provider.
+ * Zonder providers en kwantisatie: geen blok, OpenRouter kiest.
+ */
+function providerRouting(order, quantizations) {
+  const providers = parseList(order);
+  const quants = parseList(quantizations);
+  if (providers.length === 0 && quants.length === 0) return null;
+  return {
+    ...(providers.length ? { order: providers } : {}),
+    ...(quants.length ? { quantizations: quants } : {}),
+    allow_fallbacks: false,
+  };
+}
+
+/**
+ * De routes die na elkaar geprobeerd worden: de ingestelde (bij een preset
+ * zonder provider-blok, de preset draagt zijn eigen routing), en als die aan
+ * staat de uitwijkroute. Geëxporteerd voor de tests.
  */
 export function routesFor(settings) {
   const primary = {
     model: settings.model,
-    provider: usesPreset(settings.model) ? null : PROVIDER_ROUTING,
+    provider: usesPreset(settings.model) ? null : providerRouting(settings.providerOrder, settings.providerQuantizations),
   };
-  return AppConfig.LLM_FALLBACK_FOR.includes(settings.model) ? [primary, AppConfig.LLM_FALLBACK] : [primary];
+  const fallbackModel = String(settings.fallbackModel ?? '').trim();
+  if (!settings.fallbackEnabled || !fallbackModel) return [primary];
+  return [
+    primary,
+    {
+      model: fallbackModel,
+      provider: usesPreset(fallbackModel)
+        ? null
+        : providerRouting(settings.fallbackProviderOrder, settings.fallbackQuantizations),
+    },
+  ];
 }
 
 /**
@@ -118,7 +159,7 @@ async function complete(settings, request) {
     }
     for (let attempt = 1; attempt <= AppConfig.LLM_ATTEMPTS_PER_ROUTE; attempt += 1) {
       try {
-        return await completeOnce(settings, route, request);
+        return (await completeOnce(settings, route, request)).content;
       } catch (err) {
         if (!isTransient(err)) throw err;
         lastError = err;
@@ -193,7 +234,7 @@ async function completeOnce(settings, route, { system, user, maxTokens, temperat
   const choice = parsed?.choices?.[0];
   const content = choice?.message?.content;
   if (typeof content === 'string' && content.trim()) {
-    return content;
+    return { content, provider: parsed.provider ?? null, model: parsed.model ?? route.model };
   }
 
   // Leeg antwoord: zeg wát er misging in plaats van "geen tekst". De twee
@@ -688,18 +729,26 @@ export function checkCitations(text, sourceCount) {
 }
 
 /**
- * Kleine testaanroep om endpoint, key, model en routing te verifiëren.
+ * Kleine testaanroep om endpoint, key, model en routing te verifiëren: één
+ * route, één poging, zonder uitwijk — anders ziet een kapotte route er goed
+ * uit omdat de andere antwoordt.
  *
  * De tokenlimiet staat ruim genoeg voor een model dat toch redeneertokens
  * produceert: met een krappe limiet komt er een leeg antwoord terug en lijkt de
  * verbinding stuk terwijl die het gewoon doet.
+ *
+ * @param {'primary' | 'fallback'} [which]
+ * @returns {Promise<{reply: string, provider: string | null, model: string}>}
  */
-export async function testConnection(settings) {
-  const reply = await complete(settings, {
+export async function testConnection(settings, which = 'primary') {
+  const routes = routesFor(settings);
+  const route = which === 'fallback' ? routes[1] : routes[0];
+  if (!route) throw new Error('De uitwijkroute staat uit');
+  const result = await completeOnce(settings, route, {
     system: 'Antwoord met exact het woord: ok. Geen uitleg.',
     user: 'ok',
     maxTokens: 256,
     temperature: 0,
   });
-  return reply.trim().slice(0, 100);
+  return { reply: result.content.trim().slice(0, 100), provider: result.provider, model: result.model };
 }

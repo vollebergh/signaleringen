@@ -9,17 +9,15 @@
 import { Msg, send } from '../../../core/messages.js';
 import { el, clear } from '../../shared/dom.js';
 import { originPattern } from '../../../background/permissions.js';
+import { QUANTIZATIONS, validateRouting } from '../../../network/llm-client.js';
 
 /**
- * Modelvoorstellen. De preset draagt zijn eigen provider-routing
- * (`order: ["deepinfra"]`, `allow_fallbacks: false`) en is daarom de
- * aanbevolen keuze — zie [[Referentie - OpenRouter workspace en provider-routing]].
+ * Modelvoorstel. Alleen de preset: die draagt zijn eigen provider-routing
+ * (`order: ["deepinfra"]`, `allow_fallbacks: false`) — zie
+ * [[Referentie - OpenRouter workspace en provider-routing]]. Duurdere
+ * modellen als voorstel aanbieden past niet bij een taak die zo vaak draait.
  */
-const MODEL_PRESETS = [
-  { label: 'OpenRouter-preset (aanbevolen)', value: '@preset/signaleringen' },
-  { label: 'DeepSeek V4 Flash 0731', value: 'deepseek/deepseek-v4-flash-0731' },
-  { label: 'Claude Haiku 4.5', value: 'anthropic/claude-haiku-4.5' },
-];
+const MODEL_PRESETS = [{ label: 'OpenRouter-preset (aanbevolen)', value: '@preset/signaleringen' }];
 
 export async function renderSettings() {
   const [settings, vault] = await Promise.all([send(Msg.GET_SETTINGS), send(Msg.VAULT_STATUS)]);
@@ -110,7 +108,79 @@ export async function renderSettings() {
   // ── Model ─────────────────────────────────────────────────────────────────
   const modelInput = input('text', draft.model, (v) => {
     draft.model = v;
+    syncRouting();
   });
+
+  // ── Routing en uitwijkroute (B-61) ────────────────────────────────────────
+  // Wie een eigen OpenRouter-account gebruikt, heeft de preset niet en kiest
+  // hier zelf provider en uitwijk. Bij een preset gelden de providervelden
+  // niet: de preset draagt zijn eigen routing.
+  const providerOrder = input('text', draft.providerOrder, (v) => {
+    draft.providerOrder = v;
+  });
+  const providerQuantizations = input('text', draft.providerQuantizations, (v) => {
+    draft.providerQuantizations = v;
+  });
+  const presetRoutingHint = el('div', {
+    class: 'hint',
+    text: 'Je gebruikt een preset: die bepaalt zelf de provider, deze twee velden gelden dan niet.',
+  });
+
+  const fallbackCheckbox = el('input', { type: 'checkbox' });
+  fallbackCheckbox.checked = Boolean(draft.fallbackEnabled);
+  fallbackCheckbox.style.width = 'auto';
+  const fallbackModel = input('text', draft.fallbackModel, (v) => {
+    draft.fallbackModel = v;
+  });
+  const fallbackProviderOrder = input('text', draft.fallbackProviderOrder, (v) => {
+    draft.fallbackProviderOrder = v;
+  });
+  const fallbackQuantizations = input('text', draft.fallbackQuantizations, (v) => {
+    draft.fallbackQuantizations = v;
+  });
+  const fallbackFields = el('div', {}, [
+    field('Model voor de uitwijk', fallbackModel, 'Bijv. deepseek/deepseek-v4.1-flash.'),
+    field('Provider(s) voor de uitwijk', fallbackProviderOrder, 'Bijv. decart.'),
+    field('Kwantisatie voor de uitwijk (optioneel)', fallbackQuantizations, 'Bijv. fp4.'),
+  ]);
+  fallbackCheckbox.addEventListener('change', () => {
+    draft.fallbackEnabled = fallbackCheckbox.checked;
+    syncRouting();
+  });
+
+  function syncRouting() {
+    const preset = String(draft.model ?? '').includes('@preset/');
+    providerOrder.disabled = preset;
+    providerQuantizations.disabled = preset;
+    presetRoutingHint.style.display = preset ? '' : 'none';
+    fallbackFields.style.display = draft.fallbackEnabled ? '' : 'none';
+  }
+  syncRouting();
+
+  const routingSection = el('div', {}, [
+    field(
+      'Provider(s)',
+      providerOrder,
+      'De provider(s) bij OpenRouter waar het model draait, in volgorde van voorkeur, komma-gescheiden — bijv. deepinfra. OpenRouter wijkt nooit uit naar een provider die hier niet staat. Leeg: OpenRouter kiest zelf.',
+    ),
+    field(
+      'Kwantisatie (optioneel)',
+      providerQuantizations,
+      `Alleen endpoints met deze precisie, bijv. fp8. Leeg: elke. Mogelijk: ${QUANTIZATIONS.join(', ')}. Let op: een combinatie die de provider niet aanbiedt, geeft bij elke aanroep een fout.`,
+    ),
+    presetRoutingHint,
+    el('div', { class: 'field' }, [
+      el('label', { class: 'row', style: 'color:var(--text)' }, [
+        fallbackCheckbox,
+        el('span', { text: 'Uitwijkroute gebruiken' }),
+      ]),
+      el('div', {
+        class: 'hint',
+        text: 'Blijft de route hierboven na drie pogingen bezet (429) of storen (5xx), dan probeert de extensie deze route, ook drie keer. Een scan mislukt pas als ook die weigert.',
+      }),
+    ]),
+    fallbackFields,
+  ]);
 
   const presetRow = el(
     'div',
@@ -121,6 +191,7 @@ export async function renderSettings() {
         onclick: () => {
           draft.model = preset.value;
           modelInput.value = preset.value;
+          syncRouting();
         },
       }),
     ),
@@ -206,8 +277,11 @@ export async function renderSettings() {
     field(
       'Model of preset',
       modelInput,
-      'Een preset (@preset/…) draagt zijn eigen provider-routing. Bij een kaal model-id stuurt de extensie zelf provider "deepinfra" mee, zonder fallback.',
+      'Een preset (@preset/…) bestaat alleen in de OpenRouter-workspace signaleringen en draagt zijn eigen provider-routing. Met een eigen OpenRouter-account vul je een model-id in, bijv. deepseek/deepseek-v4-flash-0731, en kies je hieronder de provider.',
     ),
+
+    el('h3', { class: 'section-title', text: 'Routing' }),
+    routingSection,
 
     el('h3', { class: 'section-title', text: 'Voorfilter' }),
     prefilterField,
@@ -220,12 +294,20 @@ export async function renderSettings() {
 
     el('div', { class: 'sticky-save' }, [
       el('button', { class: 'primary', text: 'Opslaan', onclick: (e) => save(e.currentTarget) }),
-      el('button', { text: 'Verbinding testen', onclick: (e) => test(e.currentTarget) }),
+      el('button', { text: 'Verbinding testen', onclick: (e) => test(e.currentTarget, 'primary') }),
+      el('button', { text: 'Uitwijkroute testen', onclick: (e) => test(e.currentTarget, 'fallback') }),
       status,
     ]),
   );
 
+  /** @returns {Promise<boolean>} of er is opgeslagen */
   async function save(button) {
+    const routingErrors = validateRouting(draft);
+    if (routingErrors.length > 0) {
+      status.className = 'error';
+      status.textContent = routingErrors.join(' · ');
+      return false;
+    }
     button.disabled = true;
     status.className = 'muted';
     status.textContent = 'Opslaan…';
@@ -240,7 +322,7 @@ export async function renderSettings() {
             status.className = 'error';
             status.textContent = 'Zonder toestemming voor de proxy-host werkt de verbinding niet.';
             button.disabled = false;
-            return;
+            return false;
           }
         }
       }
@@ -248,22 +330,26 @@ export async function renderSettings() {
       await send(Msg.SAVE_SETTINGS, { patch: draft });
       status.className = 'muted';
       status.textContent = 'Opgeslagen.';
+      return true;
     } catch (err) {
       status.className = 'error';
       status.textContent = err.message;
+      return false;
     } finally {
       button.disabled = false;
     }
   }
 
-  async function test(button) {
+  /** Test één route met wat er nu in het formulier staat: eerst opslaan. */
+  async function test(button, route) {
+    if (!(await save(button))) return;
     button.disabled = true;
     status.className = 'muted';
-    status.textContent = 'Testen…';
+    status.textContent = route === 'fallback' ? 'Uitwijkroute testen…' : 'Testen…';
     try {
-      const { reply } = await send(Msg.TEST_CONNECTION);
+      const { reply, provider, model } = await send(Msg.TEST_CONNECTION, { route });
       status.className = 'badge ok';
-      status.textContent = `Verbinding werkt — antwoord: "${reply}"`;
+      status.textContent = `${route === 'fallback' ? 'Uitwijkroute' : 'Verbinding'} werkt — ${model}${provider ? ` via ${provider}` : ''}, antwoord: "${reply}"`;
     } catch (err) {
       status.className = 'error';
       status.textContent = err.message;

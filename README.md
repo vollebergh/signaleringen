@@ -24,8 +24,12 @@ inspecteer je via de link *service worker* op diezelfde kaart.
    nodig: de API staat verzoeken vanuit de browser toe (CORS).
 3. Laat **Model** op `@preset/signaleringen` staan. Die preset zit in de
    OpenRouter-workspace `signaleringen` en draagt de provider-routing
-   (`order: ["deepinfra"]`, `allow_fallbacks: false`).
-4. **Verbinding testen** — hoort `ok` terug te geven.
+   (`order: ["deepinfra"]`, `allow_fallbacks: false`). Met een eigen
+   OpenRouter-account bestaat die preset niet: vul dan een model-id in
+   (bijv. `deepseek/deepseek-v4-flash-0731`) en kies onder **Routing** de
+   provider(s), eventueel een kwantisatie, en de uitwijkroute.
+4. **Verbinding testen** en **Uitwijkroute testen** — horen `ok` terug te
+   geven, met de provider die antwoordde. Testen slaat eerst op.
 5. **Profielen** → *Nieuw profiel*: naam, onderwerpomschrijving, eventueel een
    eigen instructie voor de signalering, en één of meer bronnen.
 6. Per bron **Testen**; de browser vraagt bij de eerste test toestemming voor
@@ -229,7 +233,8 @@ Body en antwoord zijn ongewijzigd OpenAI-compatibel. De proxy hoeft alleen:
 4. het antwoord ongewijzigd terug te geven.
 
 De extensie stuurt zelf al `model` mee, plus — als het model géén preset is —
-een `provider`-blok met `{"order":["deepinfra"],"allow_fallbacks":false}`.
+een `provider`-blok uit de instellingen onder **Routing**, standaard
+`{"order":["deepinfra"],"allow_fallbacks":false}`.
 
 De voorfilter met Jev (zie hieronder) gebruikt een ander endpoint
 (`/api/alpha/decisions`) en werkt daarom niet via de proxy.
@@ -239,9 +244,9 @@ extensie elke aanroep tot 3 keer opnieuw (2 s, verdubbelend, maximaal 30 s;
 `Retry-After` gaat voor). Blijft de primaire route weigeren, dan wijkt ze uit
 naar `deepseek/deepseek-v4.1-flash` bij Decart in fp4
 (`{"order":["decart"],"quantizations":["fp4"],"allow_fallbacks":false}`), ook
-weer tot 3 keer. Dat geldt alleen voor de standaardmodellen (de preset en
-`deepseek/deepseek-v4-flash-0731`); een zelf gekozen model wordt nooit
-ongemerkt gewisseld. Instellingen in `AppConfig.LLM_FALLBACK`.
+weer tot 3 keer. Model, provider(s) en kwantisatie van de uitwijkroute staan
+bij **Instellingen → Routing** en de uitwijk is daar uit te zetten; standaard
+zoals hierboven (`fallback*` in `DefaultSettings`).
 
 Let op: dit is **geen remote code**. Het Edge-beleid verbiedt het laden en
 uitvoeren van extern gehost script; JSON van een API ophalen is gewoon data en

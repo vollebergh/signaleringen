@@ -211,10 +211,9 @@ const handlers = {
 
   [Msg.APPLY_SCHEDULE]: () => applySchedule(),
 
-  [Msg.TEST_CONNECTION]: async () => {
+  [Msg.TEST_CONNECTION]: async ({ route } = {}) => {
     const settings = await withApiKey(await getSettings());
-    const reply = await testConnection(settings);
-    return { reply };
+    return testConnection(settings, route);
   },
 
   [Msg.VAULT_STATUS]: () => getVaultStatus(),

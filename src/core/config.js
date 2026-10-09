@@ -30,25 +30,13 @@ export const AppConfig = {
    * meerdere batches na elkaar, en één afgewezen batch mag niet de hele scan
    * laten mislukken. Een `Retry-After` van de server gaat voor, tot het plafond.
    *
-   * Pogingen per route: eerst de primaire route (preset → DeepInfra), daarna
-   * de uitwijkroute hieronder. Dus maximaal 2 × 3 aanroepen.
+   * Pogingen per route: eerst de primaire route, daarna de uitwijkroute uit
+   * de instellingen (`fallback*` in DefaultSettings). Dus maximaal 2 × 3
+   * aanroepen.
    */
   LLM_ATTEMPTS_PER_ROUTE: 3,
   LLM_RETRY_INITIAL_DELAY_MS: 2_000,
   LLM_RETRY_MAX_DELAY_MS: 30_000,
-
-  /**
-   * Uitwijkroute (besluit B-D11, 2026-10-07): als DeepInfra na alle pogingen
-   * tijdelijk blijft weigeren, DeepSeek V4.1 Flash bij Decart in fp4 — ook
-   * vastgezet, zonder verdere fallback. Alleen voor de standaardmodellen in
-   * `LLM_FALLBACK_FOR`; wie zelf een ander model kiest, krijgt geen
-   * stille modelwissel.
-   */
-  LLM_FALLBACK: {
-    model: 'deepseek/deepseek-v4.1-flash',
-    provider: { order: ['decart'], quantizations: ['fp4'], allow_fallbacks: false },
-  },
-  LLM_FALLBACK_FOR: ['@preset/signaleringen', 'deepseek/deepseek-v4-flash-0731'],
 
   // LLM
   LLM_MAX_TOKENS: 16_384,
@@ -180,6 +168,31 @@ export const DefaultSettings = {
   directBaseUrl: 'https://openrouter.ai/api/v1',
   directApiKey: '',
   model: '@preset/signaleringen',
+
+  /**
+   * Provider-routing, in te stellen bij Instellingen (B-61). Slugs van
+   * OpenRouter-providers, komma-gescheiden, in volgorde van voorkeur; altijd
+   * met `allow_fallbacks: false`, zodat OpenRouter niet ongemerkt naar een
+   * andere provider gaat. Leeg: OpenRouter kiest. Geldt niet bij een preset
+   * (`@preset/…`): die draagt zijn eigen routing.
+   *
+   * DeepInfra zonder kwantisatiefilter: DeepInfra serveert DeepSeek V4 Flash
+   * 0731 als fp8, en `fp4` erbij gaf nul endpoints (B-D06).
+   */
+  providerOrder: 'deepinfra',
+  providerQuantizations: '',
+
+  /**
+   * Uitwijkroute (B-D11): als de primaire route na alle pogingen tijdelijk
+   * blijft weigeren (429/5xx). Standaard DeepSeek V4.1 Flash bij Decart in
+   * fp4, ook zonder verdere fallback. Zichtbaar en uit te zetten bij
+   * Instellingen, dus geen stille modelwissel.
+   */
+  fallbackEnabled: true,
+  fallbackModel: 'deepseek/deepseek-v4.1-flash',
+  fallbackProviderOrder: 'decart',
+  fallbackQuantizations: 'fp4',
+
   theme: 'system', // 'system' | 'light' | 'dark'
 
   /**
