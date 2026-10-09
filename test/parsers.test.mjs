@@ -845,6 +845,7 @@ test('isLocalBaseUrl herkent localhost, privé-adressen en .local', () => {
     'http://192.168.1.20:11434/v1',
     'http://10.0.0.5/v1',
     'http://172.20.0.2:8000/v1',
+    'http://100.101.102.103:11434/v1',
     'http://mini.local:11434/v1',
   ]) {
     assert.equal(isLocalBaseUrl(url), true, url);

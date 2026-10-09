@@ -118,8 +118,8 @@ export function validateSourceUrl(url) {
 }
 
 /**
- * Wijst de Base-URL naar een lokaal model (B-67)? Localhost, een privé-adres
- * of een `.local`-naam. Zo'n server vraagt geen API-key en kent de
+ * Wijst de Base-URL naar een lokaal model (B-67)? Localhost, een privé-adres,
+ * een adres in 100.x.x.x (o.a. Tailscale) of een `.local`-naam. Zo'n server vraagt geen API-key en kent de
  * OpenRouter-velden (provider-routing, uitwijkroute, redeneren) niet.
  */
 export function isLocalBaseUrl(url) {
@@ -134,7 +134,7 @@ export function isLocalBaseUrl(url) {
   const octets = host.split('.').map(Number);
   if (octets.length !== 4 || octets.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return false;
   const [a, b] = octets;
-  return a === 127 || a === 10 || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31);
+  return a === 127 || a === 10 || a === 100 || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31);
 }
 
 /** Dupliceert een profiel met nieuwe id's, inclusief bronnen. */

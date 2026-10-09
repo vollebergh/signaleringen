@@ -242,13 +242,14 @@ OpenAI-compatibele server, zoals Ollama of LM Studio. Bij Instellingen:
 
 - **Base-URL**: Ollama `http://localhost:11434/v1`, LM Studio
   `http://localhost:1234/v1`. Een adres op het eigen netwerk (bijv.
-  `http://192.168.1.20:11434/v1` of `http://server.local:11434/v1`) werkt ook.
+  `http://192.168.1.20:11434/v1` of `http://server.local:11434/v1`) of in
+  Tailscale (`http://100.x.x.x:11434/v1`) werkt ook.
 - **Model**: de lokale modelnaam, bijv. `qwen2.5:3b`.
 - **API-key**: leeg laten; een lokaal adres heeft er geen nodig.
 - Bij het opslaan vraagt de extensie toestemming voor het lokale adres.
 
-Herkent de extensie een lokaal adres (localhost, een privé-adres of een
-`.local`-naam), dan stuurt ze geen OpenRouter-velden mee: geen
+Herkent de extensie een lokaal adres (localhost, een privé-adres, 100.x.x.x of
+een `.local`-naam), dan stuurt ze geen OpenRouter-velden mee: geen
 provider-routing, geen redeneerinstelling en geen uitwijkroute. De voorfilter
 (Jev) is een OpenRouter-dienst; zet die uit. De beoordeling gaat in groepen van
 10 in plaats van 40.
@@ -257,18 +258,18 @@ Weigert de server de verbinding (403), sta dan verzoeken van de extensie toe:
 bij Ollama met de omgevingsvariabele `OLLAMA_ORIGINS=chrome-extension://*`, bij
 LM Studio met de CORS-schakelaar in de serverinstellingen.
 
-Wat je mag verwachten (gemeten op 2026-10-09 met `qwen2.5:3b` op een CPU zonder
-GPU, 20 nieuwsberichten):
+Model, hardware, contextvenster en KV-cache regel je zelf op de server; de
+extensie stuurt alleen verzoeken. Ter oriëntatie: een groep van 10 publicaties
+kost ± 2.200 tokens prompt plus ± 300 antwoord, dus de standaardcontext van
+Ollama (4.096) volstaat voor de beoordeling. Een synthese met veel artikelen
+vraagt meer; verruim dan de context of zet het maximum aantal artikelen in een
+signalering lager.
 
-- **Context**: de standaard van Ollama (4.096 tokens) volstaat voor de
-  beoordeling; een groep van 10 kost ± 2.200 tokens prompt plus ± 300 antwoord.
-  Een synthese met veel artikelen kan er wel overheen gaan; zet dan het maximum
-  aantal artikelen in een signalering lager.
-- **Snelheid**: ruim 4 minuten voor 20 publicaties.
-- **Kwaliteit**: een klein model geeft geregeld onleesbare JSON (de extensie
-  probeert het dan opnieuw), scoort duidelijk relevante berichten te laag en
-  schrijft een signalering zonder bronverwijzingen. Voor serieus gebruik is een
-  groter model op een machine met GPU nodig.
+Een korte proef (2026-10-09, `qwen2.5:3b`, CPU zonder GPU, 20 nieuwsberichten)
+werkte, maar duurde ruim 4 minuten en gaf matige kwaliteit: geregeld
+onleesbare JSON (de extensie probeert het dan opnieuw), te lage scores voor
+relevante berichten en een signalering zonder bronverwijzingen. Kies voor
+serieus gebruik een groter model op een machine met GPU.
 
 ## Waar de API-key staat
 
