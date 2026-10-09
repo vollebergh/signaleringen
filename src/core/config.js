@@ -129,6 +129,19 @@ export const AppConfig = {
    */
   OPEN_OVERHEID_MAX_RESULTS: 200,
 
+  /**
+   * Volledige tekst voor open.overheid-publicaties zonder fragment (B-60).
+   * De zoek-API geeft dan alleen titel en standaardomschrijving, en daar zit
+   * de meeste twijfel. Kamerstukken via officielebekendmakingen.nl hebben de
+   * hele tekst als HTML; de extensie zet een fragment rond de zoekterm erbij.
+   * Alleen voor wat beoordeeld wordt (nieuwe publicaties), een paar tegelijk,
+   * met een plafond per scan. Gemeten 2026-10-07: ± 0,6–1,7 s per pagina.
+   */
+  FULLTEXT_MAX_PER_SCAN: 100,
+  FULLTEXT_CONCURRENCY: 4,
+  FULLTEXT_SNIPPET_CHARS: 300, // per kant van een treffer
+  FULLTEXT_MAX_CHARS: 700, // alle fragmenten samen
+
   // Bewaartermijn
   SCANS_TO_KEEP_PER_PROFILE: 5,
 

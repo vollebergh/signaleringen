@@ -228,6 +228,7 @@ async function runScan(profileId, button, status) {
     const p = message.payload;
     const label = {
       fetching: `Bronnen ophalen (${p.current}/${p.total}) — ${p.sourceName ?? ''}`,
+      fulltext: `Tekst ophalen (${p.done}/${p.total})…`,
       prefiltering: `Voorfilteren (${p.total})…`,
       analyzing: `Beoordelen (${p.done}/${p.total})…`,
       synthesizing: 'Signalering opstellen…',

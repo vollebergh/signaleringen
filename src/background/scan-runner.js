@@ -31,7 +31,8 @@ import {
   recordSourceFetch,
 } from '../data/history-repository.js';
 import { withKeepalive } from './keepalive.js';
-import { missingOrigins } from './permissions.js';
+import { hasPermissionFor, missingOrigins } from './permissions.js';
+import { FULLTEXT_ORIGIN, enrichWithFullText } from '../network/open-overheid.js';
 
 /** Scans die op dit moment lopen, per profiel-id. Voorkomt dubbel werk. */
 const running = new Map();
@@ -208,6 +209,24 @@ async function executeScan(profileId, options) {
       return { scanId, relevantCount: 0, newCount: 0, totalFetched: fetched.length };
     }
 
+    // ── 1b. Volledige tekst bij publicaties zonder fragment (B-60) ────────
+    // Alleen voor wat beoordeeld wordt. Zonder toestemming voor de host gaat
+    // de scan gewoon door; het scanresultaat biedt dan een knop aan.
+    let fullText = null;
+    const withoutFragment = toEvaluate.map((item) => item.publication).filter((pub) => pub.fullTextUrl);
+    if (withoutFragment.length > 0) {
+      if (await hasPermissionFor(FULLTEXT_ORIGIN)) {
+        const total = Math.min(withoutFragment.length, AppConfig.FULLTEXT_MAX_PER_SCAN);
+        setProgress(profileId, { phase: 'fulltext', done: 0, total });
+        const outcome = await enrichWithFullText(withoutFragment, (done) =>
+          setProgress(profileId, { phase: 'fulltext', done, total }),
+        );
+        fullText = { status: 'used', ...outcome };
+      } else {
+        fullText = { status: 'no-permission', count: withoutFragment.length };
+      }
+    }
+
     // ── 2a. Voorfilter (optioneel, B-58) ──────────────────────────────────
     // Jev zeeft vóór DeepSeek. Wat eronder valt, telt als beoordeeld en
     // weggefilterd. Lukt de voorfilter niet, dan gaat alles naar het model.
@@ -323,6 +342,7 @@ async function executeScan(profileId, options) {
       filteredCount: filtered.length,
       prefilteredCount: prefiltered.length,
       prefilter,
+      fullText,
       sourceStatuses,
       scannedSourceIds: sources.map((s) => s.id),
       onlyNewPublications: profile.onlyNewPublications,

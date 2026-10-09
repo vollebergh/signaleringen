@@ -8,6 +8,7 @@
  */
 
 import { Msg, send } from '../../../core/messages.js';
+import { FULLTEXT_ORIGIN } from '../../../network/open-overheid.js';
 import { el, sourceReferences, formatDate, formatDateTime, openUrl } from '../../shared/dom.js';
 
 export async function renderScan(profileId, scanId) {
@@ -49,6 +50,7 @@ export async function renderScan(profileId, scanId) {
           class: 'muted',
           text: `Beoordeeld: alle ${scan.evaluatedCount ?? scan.totalFetched} opgehaalde publicaties, ook eerder geziene.`,
         }),
+    fullTextNote(scan),
     prefilterNote(scan),
     scan.unjudgedCount
       ? el('p', {
@@ -123,6 +125,42 @@ export async function renderScan(profileId, scanId) {
   }
 
   return root;
+}
+
+/**
+ * Volledige tekst voor publicaties zonder fragment (B-60): hoeveel aangevuld,
+ * of — zonder toestemming — een knop om die te geven. De knop werkt vanaf de
+ * volgende scan.
+ */
+function fullTextNote(scan) {
+  if (scan.fullText?.status === 'used') {
+    return el('p', {
+      class: 'muted',
+      text: `Volledige tekst: bij ${scan.fullText.enriched} van de ${scan.fullText.attempted} publicatie(s) zonder fragment een passage rond de zoekterm toegevoegd uit officielebekendmakingen.nl.`,
+    });
+  }
+  if (scan.fullText?.status === 'no-permission') {
+    const status = el('span', { class: 'muted' });
+    return el('div', { class: 'permission-warning' }, [
+      el('p', {
+        text: `${scan.fullText.count} publicatie(s) hadden geen tekstfragment; het model zag alleen titel en omschrijving. Met toegang tot officielebekendmakingen.nl haalt de extensie bij de volgende scan de passage rond de zoekterm erbij.`,
+      }),
+      el('div', { class: 'actions' }, [
+        el('button', {
+          class: 'primary',
+          text: 'Toegang geven',
+          onclick: async (event) => {
+            const button = event.currentTarget; // na een await is currentTarget leeg
+            const granted = await chrome.permissions.request({ origins: [FULLTEXT_ORIGIN] });
+            button.disabled = granted;
+            status.textContent = granted ? 'Gegeven. Geldt vanaf de volgende scan.' : 'Geen toegang gegeven.';
+          },
+        }),
+        status,
+      ]),
+    ]);
+  }
+  return null;
 }
 
 /** Wat de voorfilter (Jev, B-58) deed, als die aan stond. */

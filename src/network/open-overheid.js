@@ -28,6 +28,10 @@ import { fetchWithTimeout, isTransientStatus, classifyFetchError } from './http.
 import { stripHtml } from './feed-fetcher.js';
 
 const SITE_HOST = 'open.overheid.nl';
+
+/** Host met de volledige tekst van Kamerstukken (B-60). */
+const FULLTEXT_HOST = 'zoek.officielebekendmakingen.nl';
+export const FULLTEXT_ORIGIN = `https://${FULLTEXT_HOST}/*`;
 const API_BASE = 'https://open.overheid.nl/overheid/openbaarmakingen/api/v0/zoek';
 const PAGE_SIZE = 50;
 
@@ -133,14 +137,14 @@ export function toApiUrl(siteUrl, { since = 0, until = null, start = 0 } = {}) {
  * rond de zoekterm) heeft voorrang op `omschrijving`, die bij bijvoorbeeld
  * beslisnota's een standaardzin is.
  */
-export function mapResults(json, sourceName) {
+export function mapResults(json, sourceName, terms = []) {
   return (json?.resultaten ?? [])
     .map((item) => {
       const doc = item?.document ?? {};
       const text = stripHtml(item?.highlightedText || doc.omschrijving || '');
       const publisher = doc.publisher && doc.publisher !== 'Onbekend' ? doc.publisher : '';
       const description = [publisher, text].filter(Boolean).join(' — ');
-      return createPublication({
+      const publication = createPublication({
         title: (doc.titel ?? '').trim(),
         description:
           description.length > AppConfig.RSS_DESCRIPTION_MAX_CHARS
@@ -150,8 +154,132 @@ export function mapResults(json, sourceName) {
         publishedDate: doc.openbaarmakingsdatum ? Date.parse(doc.openbaarmakingsdatum) || 0 : 0,
         sourceName,
       });
+      // Geen fragment, wel de volledige tekst bij officielebekendmakingen.nl:
+      // de scan kan die er later bij halen (B-60).
+      if (!item?.highlightedText && fullTextUrlFor(doc.weblocatie)) {
+        publication.fullTextUrl = fullTextUrlFor(doc.weblocatie);
+        publication.fullTextTerms = terms;
+      }
+      return publication;
     })
     .filter((pub) => pub.title && pub.url);
+}
+
+/** De weblocatie als https-URL op officielebekendmakingen.nl, of null. */
+function fullTextUrlFor(weblocatie) {
+  try {
+    const url = new URL(weblocatie);
+    if (url.hostname !== FULLTEXT_HOST) return null;
+    url.protocol = 'https:';
+    return url.href;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Zoektermen uit de zoek-URL: losse woorden van ten minste 3 tekens, zonder
+ * AND/OR/NOT, aanhalingstekens of jokertekens. Geëxporteerd voor de tests.
+ */
+export function searchTerms(siteUrl) {
+  let query = '';
+  try {
+    query = new URL(siteUrl).searchParams.get('zoeken') ?? '';
+  } catch {
+    return [];
+  }
+  const words = query
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}-]+/u)
+    .map((w) => w.replace(/^-+|-+$/g, ''))
+    .filter((w) => w.length >= 3 && !['and', 'or', 'not'].includes(w));
+  return [...new Set(words)];
+}
+
+/**
+ * De documenttekst uit een pagina van officielebekendmakingen.nl: alles in
+ * `<div id="broodtekst">` tot het einde van het artikel, zonder menu's en
+ * zijbalk. Leeg als de pagina die opbouw niet heeft. Geëxporteerd voor de tests.
+ */
+export function extractBodyText(html) {
+  const start = html.indexOf('id="broodtekst"');
+  if (start === -1) return '';
+  const open = html.indexOf('>', start);
+  const end = html.indexOf('</article>', open);
+  return stripHtml(html.slice(open + 1, end === -1 ? undefined : end));
+}
+
+/**
+ * Fragmenten rond de eerste treffers van de zoektermen, samen hooguit
+ * `maxChars` tekens, gescheiden door " … ". Leeg zonder treffer: liever de
+ * oude beschrijving houden dan een willekeurig stuk tekst geven.
+ * Geëxporteerd voor de tests.
+ */
+export function snippetAround(text, terms, side = AppConfig.FULLTEXT_SNIPPET_CHARS, maxChars = AppConfig.FULLTEXT_MAX_CHARS) {
+  if (!text || terms.length === 0) return '';
+  const lower = text.toLowerCase();
+  const hits = [];
+  for (const term of terms) {
+    for (let at = lower.indexOf(term); at !== -1; at = lower.indexOf(term, at + term.length)) hits.push(at);
+  }
+  hits.sort((a, b) => a - b);
+
+  const parts = [];
+  let used = 0;
+  let coveredUntil = -1;
+  for (const at of hits) {
+    if (at < coveredUntil) continue;
+    // Op woordgrenzen knippen, zodat het fragment leesbaar begint en eindigt.
+    let from = Math.max(0, at - side);
+    let to = Math.min(text.length, at + side);
+    if (from > 0) from = text.indexOf(' ', from) + 1 || from;
+    if (to < text.length) to = text.lastIndexOf(' ', to) > at ? text.lastIndexOf(' ', to) : to;
+    const part = text.slice(from, to).trim();
+    if (used + part.length > maxChars) break;
+    parts.push(`${from > 0 ? '…' : ''}${part}${to < text.length ? '…' : ''}`);
+    used += part.length;
+    coveredUntil = to;
+  }
+  return parts.join(' ');
+}
+
+/**
+ * Haalt voor publicaties met een `fullTextUrl` de tekst op en zet een fragment
+ * rond de zoekterm achter de beschrijving. Een pagina die niet lukt of geen
+ * treffer heeft, laat de publicatie zoals ze was. Nooit een fout naar boven:
+ * dit is een verbetering, geen voorwaarde voor de scan.
+ *
+ * @param {import('../core/models.js').Publication[]} publications
+ * @returns {Promise<{attempted: number, enriched: number}>}
+ */
+export async function enrichWithFullText(publications, onProgress) {
+  const queue = publications.filter((p) => p.fullTextUrl).slice(0, AppConfig.FULLTEXT_MAX_PER_SCAN);
+  let done = 0;
+  let enriched = 0;
+
+  const worker = async () => {
+    for (let pub = queue.shift(); pub; pub = queue.shift()) {
+      try {
+        const response = await fetchWithTimeout(pub.fullTextUrl, { headers: { Accept: 'text/html' } }, AppConfig.FEED_TIMEOUT_MS);
+        if (response.ok) {
+          const snippet = snippetAround(extractBodyText(await response.text()), pub.fullTextTerms ?? []);
+          if (snippet) {
+            pub.description = [pub.description, snippet].filter(Boolean).join(' — ');
+            enriched += 1;
+          }
+        }
+      } catch (err) {
+        log.debug(`Volledige tekst niet opgehaald voor ${pub.fullTextUrl}: ${err.message}`);
+      }
+      done += 1;
+      onProgress?.(done);
+    }
+  };
+
+  const attempted = queue.length;
+  await Promise.all(Array.from({ length: AppConfig.FULLTEXT_CONCURRENCY }, worker));
+  log.info(`Volledige tekst: ${enriched} van ${attempted} publicatie(s) zonder fragment aangevuld`);
+  return { attempted, enriched };
 }
 
 /**
@@ -172,6 +300,7 @@ export async function fetchOpenOverheid(source, since) {
   // (since 0), dat alleen één pagina en het totaal wil zien.
   const period = since > 0 ? periodFromSiteUrl(source.url) : null;
   const range = period ? { since: period.since, until: period.until } : { since, until: null };
+  const terms = searchTerms(source.url);
 
   try {
     for (let start = 0; start < max; start += PAGE_SIZE) {
@@ -186,7 +315,7 @@ export async function fetchOpenOverheid(source, since) {
       }
 
       const json = await response.json();
-      const page = mapResults(json, source.name);
+      const page = mapResults(json, source.name, terms);
       publications.push(...page);
 
       const total = Number(json?.totaal ?? 0);

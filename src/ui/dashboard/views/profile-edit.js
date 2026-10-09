@@ -8,8 +8,8 @@ import { AppConfig } from '../../../core/config.js';
 import { Msg, send } from '../../../core/messages.js';
 import { createProfile, createSource, SourceType, validateSourceUrl } from '../../../core/models.js';
 import { el, clear, formatDateTime, openUrl } from '../../shared/dom.js';
-import { originPattern } from '../../../background/permissions.js';
-import { isOpenOverheidSearchUrl } from '../../../network/open-overheid.js';
+import { missingOf, originsForSources } from '../../../background/permissions.js';
+import { FULLTEXT_ORIGIN, isOpenOverheidSearchUrl } from '../../../network/open-overheid.js';
 
 /**
  * Keuzes voor het scaninterval. Een select met vaste stappen in plaats van een
@@ -312,9 +312,11 @@ export async function renderProfileEdit(profileId) {
 
     // Zonder host-toestemming faalt de fetch met een generieke netwerkfout —
     // dus die vragen we eerst, vanuit deze klik (een gebruikersgebaar).
-    const origin = originPattern(source.url);
-    if (origin && !(await chrome.permissions.contains({ origins: [origin] }))) {
-      const granted = await chrome.permissions.request({ origins: [origin] });
+    // Bij open.overheid in hetzelfde verzoek ook officielebekendmakingen.nl,
+    // voor de volledige tekst van publicaties zonder fragment (B-60).
+    const missingForSource = await missingOf(originsForSources([source]));
+    if (missingForSource.length > 0) {
+      const granted = await chrome.permissions.request({ origins: missingForSource });
       if (!granted) {
         output.textContent = 'Geen toestemming voor deze host';
         output.className = 'error';
@@ -346,13 +348,8 @@ export async function renderProfileEdit(profileId) {
 
   /** Toont welke hosts nog toestemming missen, met één knop om die te vragen. */
   async function refreshPermissions() {
-    const urls = draft.sources.map((s) => s.url).filter((u) => validateSourceUrl(u) === null && u);
-    const origins = [...new Set(urls.map(originPattern).filter(Boolean))];
-
-    const missing = [];
-    for (const origin of origins) {
-      if (!(await chrome.permissions.contains({ origins: [origin] }))) missing.push(origin);
-    }
+    const valid = draft.sources.filter((s) => s.url && validateSourceUrl(s.url) === null);
+    const missing = await missingOf(originsForSources(valid));
 
     clear(permissionNotice);
     if (missing.length === 0) return;
@@ -362,7 +359,18 @@ export async function renderProfileEdit(profileId) {
         el('p', {
           text: `${missing.length} host(s) hebben nog geen toestemming. Zonder toestemming kan de extensie deze bronnen niet ophalen.`,
         }),
-        el('ul', { class: 'source-list' }, missing.map((o) => el('li', { text: o }))),
+        el(
+          'ul',
+          { class: 'source-list' },
+          missing.map((o) =>
+            el('li', {
+              text:
+                o === FULLTEXT_ORIGIN
+                  ? `${o} — voor de volledige tekst van Kamerstukken bij open.overheid-bronnen (optioneel, maar beter beoordeeld)`
+                  : o,
+            }),
+          ),
+        ),
         el('button', {
           class: 'primary',
           text: 'Toestemming vragen',

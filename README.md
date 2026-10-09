@@ -81,6 +81,9 @@ De extensie declareert geen enkele host-permissie vooraf — alleen
 dat je een bron of proxy toevoegt, altijd vanuit een klik. Dat is nodig voor de
 Edge Add-ons-certificering (permissies "voor later" aanvragen is verboden) en
 beperkt de blootstelling tot precies de hosts die je zelf hebt ingevoerd.
+Bij een open.overheid-bron vraagt de extensie in hetzelfde verzoek ook
+`zoek.officielebekendmakingen.nl`, voor de volledige tekst van Kamerstukken
+(zie *Bronnen*); dat is geen voorwaarde om te kunnen scannen.
 
 Vaste permissies en waarom ze nodig zijn:
 
@@ -114,6 +117,19 @@ haalt de extensie die hele periode op, tot maximaal 200 publicaties per scan:
 "Afgelopen week/maand/jaar" schuift mee met de datum, een zelfgekozen periode
 geldt letterlijk. Zonder periode geldt het ophaalvenster van de extensie
 (7 dagen). Sortering en paginering uit de URL worden genegeerd.
+
+**Publicaties zonder fragment.** De zoek-API geeft bij een deel van de
+treffers geen tekstfragment rond de zoekterm, alleen titel en een
+standaardomschrijving ("Brief regering"). Komt zo'n publicatie van
+officielebekendmakingen.nl (Kamerstukken, Kamervragen, moties), dan haalt de
+scan daar de volledige tekst op en zet de passage(s) rond de zoekterm achter
+de beschrijving, vóór de voorfilter en de relevantiestap. Alleen voor wat
+beoordeeld wordt, 4 tegelijk, tot 100 per scan. Geen treffer in de tekst
+(bijvoorbeeld een bijlage waarvan de inhoud in een PDF staat): de beschrijving
+blijft zoals ze was. Zonder toestemming voor de host gaat de scan gewoon door
+en biedt het scanresultaat een knop *Toegang geven* aan. Gemeten op het
+additionaliteitsprofiel: 20 van 51 aangevuld in 12 s; 17 daarvan bleken
+relevant, waar het model ze zonder tekst op 5–30 had gezet.
 
 Tips voor een profiel over een beleidsdossier:
 

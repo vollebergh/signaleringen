@@ -698,3 +698,66 @@ test('readDecisions leest de antwoorden in volgorde van de batch', () => {
   );
   assert.throws(() => readDecisions({ answers: {} }, 1), /p0/);
 });
+
+// ── Volledige tekst voor open.overheid zonder fragment (B-60) ───────────────
+
+import {
+  searchTerms,
+  extractBodyText,
+  snippetAround,
+  mapResults as mapOpenOverheid,
+  FULLTEXT_ORIGIN,
+} from '../src/network/open-overheid.js';
+import { originsForSources } from '../src/background/permissions.js';
+
+test('searchTerms: losse woorden uit de zoek-URL, zonder operatoren en korte woorden', () => {
+  assert.deepEqual(searchTerms('https://open.overheid.nl/zoeken?zoeken=additionaliteit'), ['additionaliteit']);
+  assert.deepEqual(
+    searchTerms('https://open.overheid.nl/zoeken?zoeken=%22rekenkundige+ondergrens%22+AND+stikstof+of+N2000'),
+    ['rekenkundige', 'ondergrens', 'stikstof', 'n2000'],
+  );
+  assert.deepEqual(searchTerms('https://open.overheid.nl/zoeken?zoeken='), []);
+  assert.deepEqual(searchTerms('geen url'), []);
+});
+
+test('extractBodyText: alleen de broodtekst, zonder menu of zijbalk', () => {
+  const html = `<nav>Menu stikstof</nav><div id="broodtekst" class="stuk"><p>Het <b>additionaliteitsvereiste</b> &amp; meer.</p></div></article><aside>Zijbalk</aside>`;
+  assert.equal(extractBodyText(html), 'Het additionaliteitsvereiste & meer.');
+  assert.equal(extractBodyText('<p>geen broodtekst</p>'), '');
+});
+
+test('snippetAround: fragment rond de treffer, op woordgrenzen, begrensd', () => {
+  const filler = (n) => Array.from({ length: n }, (_, i) => `woord${i}`).join(' ');
+  const text = `${filler(100)} het additionaliteitsvereiste is lastig ${filler(100)}`;
+  const snippet = snippetAround(text, ['additionalit'], 60, 700);
+  assert.match(snippet, /^….*additionaliteitsvereiste is lastig.*…$/);
+  assert.ok(snippet.length < 140);
+  assert.match(snippet, /^…woord\d+ .* woord\d+…$/, 'knipt op woordgrenzen');
+  assert.equal(snippetAround(text, ['stikstof']), '');
+  assert.equal(snippetAround(text, []), '');
+  const many = Array.from({ length: 20 }, () => `${filler(60)} stikstof`).join(' ');
+  assert.ok(snippetAround(many, ['stikstof'], 100, 300).length <= 300 + 10);
+});
+
+test('mapResults: zonder fragment en met weblocatie bij officielebekendmakingen.nl een fullTextUrl', () => {
+  const json = {
+    resultaten: [
+      { document: { titel: 'A', pid: 'https://open.overheid.nl/documenten/a', weblocatie: 'http://zoek.officielebekendmakingen.nl/kst-1.html' } },
+      { document: { titel: 'B', pid: 'https://open.overheid.nl/documenten/b', weblocatie: 'https://zoek.officielebekendmakingen.nl/kst-2.html' }, highlightedText: 'met <b>fragment</b>' },
+      { document: { titel: 'C', pid: 'https://open.overheid.nl/documenten/c' } },
+    ],
+  };
+  const [a, b, c] = mapOpenOverheid(json, 'Bron', ['stikstof']);
+  assert.equal(a.fullTextUrl, 'https://zoek.officielebekendmakingen.nl/kst-1.html');
+  assert.deepEqual(a.fullTextTerms, ['stikstof']);
+  assert.equal(b.fullTextUrl, undefined);
+  assert.equal(c.fullTextUrl, undefined);
+});
+
+test('originsForSources: open.overheid vraagt ook officielebekendmakingen.nl, RSS niet', () => {
+  assert.deepEqual(originsForSources([{ url: 'https://example.com/rss', type: 'RSS' }]), ['https://example.com/*']);
+  assert.deepEqual(
+    originsForSources([{ url: 'https://open.overheid.nl/zoeken?zoeken=stikstof', type: 'OPEN_OVERHEID' }]),
+    ['https://open.overheid.nl/*', FULLTEXT_ORIGIN],
+  );
+});
