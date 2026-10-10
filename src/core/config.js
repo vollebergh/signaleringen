@@ -148,6 +148,19 @@ export const AppConfig = {
   FULLTEXT_MAX_PER_SCAN: 100,
   FULLTEXT_CONCURRENCY: 4,
   //
+  // PDF-bijlagen (`blg-…`, B-63). De server ondersteunt geen Range-verzoeken,
+  // dus een PDF komt altijd helemaal binnen en gaat in het geheugen van de
+  // service worker. Gemeten 2026-10-10 op 30 bijlagen zonder fragment: 27 van
+  // ≤ 35 MB in 0,1–2,9 s downloaden en 0,0–4,5 s lezen; de drie grootste
+  // (53, 57 en 177 MB) laten we liggen. De grens komt uit `bestandsgrootte` en
+  // `aantalPaginas` in de zoekresultaten, vóór het downloaden. Minder tegelijk
+  // dan HTML, want elk bestand staat in het geheugen.
+  FULLTEXT_PDF_MAX_MB: 25,
+  FULLTEXT_PDF_MAX_PAGES: 500,
+  FULLTEXT_PDF_MAX_PER_SCAN: 25,
+  FULLTEXT_PDF_CONCURRENCY: 2,
+  FULLTEXT_PDF_TIMEOUT_MS: 60_000, // headers én body
+  //
   // Fragmentgrootte gelijk aan een gewoon fragment van de zoek-API (mediaan
   // ± 250 tekens incl. organisatie). Gemeten 2026-10-09 op 151 publicaties:
   // 300 tekens kost +1.400 prompttokens per scan (+6,5%, ± 70 per aangevulde

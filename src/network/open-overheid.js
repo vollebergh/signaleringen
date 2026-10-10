@@ -156,9 +156,14 @@ export function mapResults(json, sourceName, terms = []) {
       });
       // Geen fragment, wel de volledige tekst bij officielebekendmakingen.nl:
       // de scan kan die er later bij halen (B-60).
-      if (!item?.highlightedText && fullTextUrlFor(doc.weblocatie)) {
-        publication.fullTextUrl = fullTextUrlFor(doc.weblocatie);
-        publication.fullTextTerms = terms;
+      // Bijlagen bestaan alleen als PDF (B-63); die lezen we als de grootte
+      // het toelaat.
+      if (!item?.highlightedText) {
+        const url = fullTextUrlFor(doc.weblocatie) ?? pdfUrlFor(doc.weblocatie, item);
+        if (url) {
+          publication.fullTextUrl = url;
+          publication.fullTextTerms = terms;
+        }
       }
       return publication;
     })
@@ -179,6 +184,37 @@ function fullTextUrlFor(weblocatie) {
     return url.href;
   } catch {
     return null;
+  }
+}
+
+/**
+ * De PDF-URL van een bijlage (`blg-…`), of null. Alleen als de zoek-API zegt
+ * dat het een PDF is en de grootte en het aantal pagina's binnen de grens
+ * blijven: de server doet geen Range-verzoeken, dus het bestand komt helemaal
+ * binnen. Zonder bekende grootte (`bestandsgrootte`) laten we het liggen.
+ */
+function pdfUrlFor(weblocatie, item) {
+  if (item?.bestandsType !== 'application/pdf') return null;
+  const megabytes = Number.parseFloat(String(item.bestandsgrootte ?? '').replace(',', '.'));
+  if (!(megabytes > 0) || megabytes > AppConfig.FULLTEXT_PDF_MAX_MB) return null;
+  if (Number(item.aantalPaginas) > AppConfig.FULLTEXT_PDF_MAX_PAGES) return null;
+  try {
+    const url = new URL(weblocatie);
+    if (url.hostname !== FULLTEXT_HOST || !/^\/blg-\d+\.html$/.test(url.pathname)) return null;
+    url.protocol = 'https:';
+    url.pathname = url.pathname.replace(/\.html$/, '.pdf');
+    return url.href;
+  } catch {
+    return null;
+  }
+}
+
+/** Wijst een `fullTextUrl` naar een PDF (bijlage) in plaats van een webpagina? */
+export function isPdfUrl(url) {
+  try {
+    return new URL(url).pathname.endsWith('.pdf');
+  } catch {
+    return false;
   }
 }
 
@@ -248,39 +284,87 @@ export function snippetAround(text, terms, side = AppConfig.FULLTEXT_SNIPPET_CHA
   return parts.join(' ');
 }
 
+/** Leest de body, maar geeft op na `timeoutMs`: `fetch` heeft alleen een deadline op de headers. */
+async function readBytes(response, timeoutMs) {
+  let timer;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error('time-out bij het lezen van de bijlage')), timeoutMs);
+  });
+  try {
+    return new Uint8Array(await Promise.race([response.arrayBuffer(), deadline]));
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
  * Haalt voor publicaties met een `fullTextUrl` de tekst op en zet een fragment
  * rond de zoekterm achter de beschrijving. Een pagina die niet lukt of geen
  * treffer heeft, laat de publicatie zoals ze was. Nooit een fout naar boven:
  * dit is een verbetering, geen voorwaarde voor de scan.
  *
+ * Webpagina's (Kamerstukken) en PDF-bijlagen lopen in twee wachtrijen met een
+ * eigen aantal tegelijk. PDF's alleen als de aanroeper een `extractPdfText`
+ * meegeeft (de achtergrondscan; `pdf-text.js`).
+ *
  * @param {import('../core/models.js').Publication[]} publications
- * @returns {Promise<{attempted: number, enriched: number}>}
+ * @param {(done: number) => void} [onProgress]
+ * @param {{ extractPdfText?: (data: Uint8Array, terms: string[]) => Promise<string> }} [options]
+ * @returns {Promise<{attempted: number, enriched: number, pdfAttempted: number, pdfEnriched: number}>}
  */
-export async function enrichWithFullText(publications, onProgress) {
-  const queue = publications.filter((p) => p.fullTextUrl).slice(0, AppConfig.FULLTEXT_MAX_PER_SCAN);
+export async function enrichWithFullText(publications, onProgress, { extractPdfText } = {}) {
+  const pending = publications.filter((p) => p.fullTextUrl).slice(0, AppConfig.FULLTEXT_MAX_PER_SCAN);
+  const pageQueue = pending.filter((p) => !isPdfUrl(p.fullTextUrl));
+  const pdfQueue = extractPdfText
+    ? pending.filter((p) => isPdfUrl(p.fullTextUrl)).slice(0, AppConfig.FULLTEXT_PDF_MAX_PER_SCAN)
+    : [];
+  const attempted = pageQueue.length;
+  const pdfAttempted = pdfQueue.length;
   let done = 0;
   let enriched = 0;
+  let pdfEnriched = 0;
 
-  const worker = async () => {
+  const addSnippet = (pub, text) => {
+    const snippet = snippetAround(text, pub.fullTextTerms ?? []);
+    if (!snippet) return false;
+    pub.description = [pub.description, snippet].filter(Boolean).join(' — ');
+    return true;
+  };
+
+  // `no-store`: het document is alleen nodig voor het fragment en mag niet in
+  // de HTTP-cache van de browser blijven staan. De server zegt dat zelf ook
+  // (`cache-control: no-store`), maar daar leunen we niet op. De tekst zelf
+  // wordt nergens bewaard; alleen het fragment.
+  const fetchPage = async (pub) => {
+    const response = await fetchWithTimeout(
+      pub.fullTextUrl,
+      { headers: { Accept: 'text/html' }, cache: 'no-store' },
+      AppConfig.FEED_TIMEOUT_MS,
+    );
+    return response.ok && addSnippet(pub, extractBodyText(await response.text()));
+  };
+
+  const fetchPdf = async (pub) => {
+    const response = await fetchWithTimeout(
+      pub.fullTextUrl,
+      { headers: { Accept: 'application/pdf' }, cache: 'no-store' },
+      AppConfig.FULLTEXT_PDF_TIMEOUT_MS,
+    );
+    if (!response.ok) return false;
+    // De zoek-API gaf een grootte vooraf; de server weet het zelf beter.
+    const length = Number(response.headers.get('content-length'));
+    if (length > AppConfig.FULLTEXT_PDF_MAX_MB * 1024 * 1024) {
+      await response.body?.cancel();
+      return false;
+    }
+    const bytes = await readBytes(response, AppConfig.FULLTEXT_PDF_TIMEOUT_MS);
+    return addSnippet(pub, await extractPdfText(bytes, pub.fullTextTerms ?? []));
+  };
+
+  const worker = (queue, fetchOne, onEnriched) => async () => {
     for (let pub = queue.shift(); pub; pub = queue.shift()) {
       try {
-        // `no-store`: het document is alleen nodig voor het fragment en mag
-        // niet in de HTTP-cache van de browser blijven staan. De server zegt
-        // dat zelf ook (`cache-control: no-store`), maar daar leunen we niet
-        // op. De tekst zelf wordt nergens bewaard; alleen het fragment.
-        const response = await fetchWithTimeout(
-          pub.fullTextUrl,
-          { headers: { Accept: 'text/html' }, cache: 'no-store' },
-          AppConfig.FEED_TIMEOUT_MS,
-        );
-        if (response.ok) {
-          const snippet = snippetAround(extractBodyText(await response.text()), pub.fullTextTerms ?? []);
-          if (snippet) {
-            pub.description = [pub.description, snippet].filter(Boolean).join(' — ');
-            enriched += 1;
-          }
-        }
+        if (await fetchOne(pub)) onEnriched();
       } catch (err) {
         log.debug(`Volledige tekst niet opgehaald voor ${pub.fullTextUrl}: ${err.message}`);
       }
@@ -289,10 +373,16 @@ export async function enrichWithFullText(publications, onProgress) {
     }
   };
 
-  const attempted = queue.length;
-  await Promise.all(Array.from({ length: AppConfig.FULLTEXT_CONCURRENCY }, worker));
-  log.info(`Volledige tekst: ${enriched} van ${attempted} publicatie(s) zonder fragment aangevuld`);
-  return { attempted, enriched };
+  const pageWorker = worker(pageQueue, fetchPage, () => (enriched += 1));
+  const pdfWorker = worker(pdfQueue, fetchPdf, () => (pdfEnriched += 1));
+  await Promise.all([
+    ...Array.from({ length: AppConfig.FULLTEXT_CONCURRENCY }, pageWorker),
+    ...Array.from({ length: AppConfig.FULLTEXT_PDF_CONCURRENCY }, pdfWorker),
+  ]);
+  log.info(
+    `Volledige tekst: ${enriched} van ${attempted} pagina('s) en ${pdfEnriched} van ${pdfAttempted} PDF-bijlage(n) zonder fragment aangevuld`,
+  );
+  return { attempted, enriched, pdfAttempted, pdfEnriched };
 }
 
 /**

@@ -139,11 +139,18 @@ export async function renderScan(profileId, scanId) {
  * of — zonder toestemming — een knop om die te geven. De knop werkt vanaf de
  * volgende scan.
  */
+function fullTextSummary({ attempted = 0, enriched = 0, pdfAttempted = 0, pdfEnriched = 0 }) {
+  const total = attempted + pdfAttempted;
+  const done = enriched + pdfEnriched;
+  const pdf = pdfAttempted > 0 ? `, waarvan ${pdfEnriched} uit een PDF-bijlage` : '';
+  return `Volledige tekst: bij ${done} van de ${total} publicatie(s) zonder fragment een passage rond de zoekterm toegevoegd uit officielebekendmakingen.nl${pdf}.`;
+}
+
 function fullTextNote(scan) {
   if (scan.fullText?.status === 'used') {
     return el('p', {
       class: 'muted',
-      text: `Volledige tekst: bij ${scan.fullText.enriched} van de ${scan.fullText.attempted} publicatie(s) zonder fragment een passage rond de zoekterm toegevoegd uit officielebekendmakingen.nl.`,
+      text: fullTextSummary(scan.fullText),
     });
   }
   if (scan.fullText?.status === 'no-permission') {

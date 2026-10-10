@@ -156,9 +156,13 @@ officielebekendmakingen.nl (Kamerstukken, Kamervragen, moties), dan haalt de
 scan daar de volledige tekst op en zet de passage(s) rond de zoekterm achter
 de beschrijving, vóór de voorfilter en de relevantiestap. Alleen voor wat
 beoordeeld wordt, 4 tegelijk, tot 100 per scan. Kamerstukken (`kst-`) en
-Kamervragen met antwoord (`ah-`) staan daar met de hele documenttekst; bijlagen
-(`blg-`) alleen als PDF, die slaat de extensie over. Geen treffer in de tekst:
-de beschrijving blijft zoals ze was. Zonder toestemming voor de host gaat de
+Kamervragen met antwoord (`ah-`) staan daar met de hele documenttekst.
+Bijlagen (`blg-`) bestaan alleen als PDF; die leest de extensie met het
+meegeleverde pdf.js (`vendor/pdfjs`, Apache-2.0, zie de README daar), 2
+tegelijk en tot 25 per scan. De server ondersteunt geen Range-verzoeken, dus
+een PDF komt helemaal binnen; daarom blijven bestanden boven 25 MB of 500
+pagina's liggen (de zoek-API geeft grootte en aantal pagina's vooraf). Geen
+treffer in de tekst: de beschrijving blijft zoals ze was. Zonder toestemming voor de host gaat de
 scan gewoon door en biedt het scanresultaat een knop *Toegang geven* aan.
 
 - **Tokens:** het fragment is maximaal 300 tekens, even groot als een gewoon
@@ -293,6 +297,31 @@ werkte, maar duurde ruim 4 minuten en gaf matige kwaliteit: geregeld
 onleesbare JSON (de extensie probeert het dan opnieuw), te lage scores voor
 relevante berichten en een signalering zonder bronverwijzingen. Kies voor
 serieus gebruik een groter model op een machine met GPU.
+
+## Privacy en gegevensverwerking
+
+Het volledige beleid staat in [PRIVACY.md](PRIVACY.md). Samengevat:
+
+- **Geen eigen server, geen account, geen telemetrie.** Profielen, bronnen,
+  publicaties, scanresultaten en instellingen staan lokaal in `chrome.storage.local`
+  en IndexedDB.
+- **Het taalmodel kiest de gebruiker.** Bij een scan gaan per publicatie
+  bronnaam, titel en een tekstfragment (max. 1.000 tekens bij het beoordelen,
+  2.000 bij het samenvatten), de vraag van het profiel en een eventuele
+  aanvullende instructie naar het endpoint en model dat bij *Instellingen*
+  staat. Het standaard-endpoint is OpenRouter; model, provider-routing en
+  uitwijk stelt de gebruiker zelf in.
+- **Verantwoordelijkheid ligt bij de gebruiker.** De extensie garandeert niets
+  over wat een gekozen aanbieder met de invoer doet. Wie een eigen model of
+  provider-slug invult, controleert vóór gebruik het bewaar- en trainingsbeleid
+  van die aanbieder. Bij OpenRouter kan dat afdwingbaar met de privacy-instelling
+  van het account (alleen *zero data retention*-aanbieders of zonder training).
+- **Voorfilter en uitwijk** sturen dezelfde inhoud naar een tweede model en
+  aanbieder; beide zijn instellingen van de gebruiker en de voorfilter staat
+  standaard uit.
+- **Bronnen:** alleen hosts die de gebruiker toevoegt, plus `open.overheid.nl`
+  en `zoek.officielebekendmakingen.nl`. Er worden geen host-permissies vooraf
+  gevraagd (zie *Permissiemodel*).
 
 ## Waar de API-key staat
 

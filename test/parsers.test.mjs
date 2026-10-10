@@ -942,3 +942,102 @@ test('parseFeed: media:description als enige omschrijving (YouTube)', () => {
   </entry></feed>`;
   assert.equal(parseFeed(xml, 'Bron', 0)[0].description, 'Over de video.');
 });
+
+// ── PDF-bijlagen (B-63) ───────────────────────────────────────────────────
+
+import { mapResults as mapPdfResults, enrichWithFullText as enrichPdf, isPdfUrl } from '../src/network/open-overheid.js';
+import { extractPdfText } from '../src/network/pdf-text.js';
+
+/** Een minimale PDF met één regel tekst per pagina, met kloppende xref. */
+function makePdf(pages) {
+  const objects = [];
+  const add = (body) => objects.push(body) && objects.length; // 1-based id
+  add('<< /Type /Catalog /Pages 2 0 R >>');
+  add(`<< /Type /Pages /Count ${pages.length} /Kids [${pages.map((_, i) => `${4 + i * 2} 0 R`).join(' ')}] >>`);
+  add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+  pages.forEach((text, i) => {
+    const stream = `BT /F1 12 Tf 50 700 Td (${text.replace(/[()\\]/g, '\\$&')}) Tj ET`;
+    add(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents ${5 + i * 2} 0 R /Resources << /Font << /F1 3 0 R >> >> >>`);
+    add(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
+  });
+  let out = '%PDF-1.4\n';
+  const offsets = [];
+  objects.forEach((body, i) => {
+    offsets.push(out.length);
+    out += `${i + 1} 0 obj\n${body}\nendobj\n`;
+  });
+  const xref = out.length;
+  out += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const offset of offsets) out += `${String(offset).padStart(10, '0')} 00000 n \n`;
+  out += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return new TextEncoder().encode(out);
+}
+
+test('mapResults: PDF-bijlage zonder fragment krijgt een .pdf-URL, mits de grootte bekend en klein genoeg is', () => {
+  const blg = (extra) => ({
+    document: { titel: 'Bijlage', pid: 'https://open.overheid.nl/documenten/x', weblocatie: 'https://zoek.officielebekendmakingen.nl/blg-1256516.html' },
+    ...extra,
+  });
+  const json = {
+    resultaten: [
+      blg({ bestandsType: 'application/pdf', bestandsgrootte: '0.28 MB', aantalPaginas: 13 }),
+      blg({ bestandsType: 'application/pdf', bestandsgrootte: '176.89 MB', aantalPaginas: 281 }),
+      blg({ bestandsType: 'application/pdf', bestandsgrootte: '2 MB', aantalPaginas: 900 }),
+      blg({ bestandsType: 'application/pdf' }),
+      blg({ bestandsType: 'text/html', bestandsgrootte: '0.1 MB' }),
+      blg({ bestandsType: 'application/pdf', bestandsgrootte: '0.28 MB', highlightedText: 'met <b>fragment</b>' }),
+    ],
+  };
+  const [ok, tooBig, tooLong, noSize, notPdf, withFragment] = mapPdfResults(json, 'Bron', ['stikstof']);
+  assert.equal(ok.fullTextUrl, 'https://zoek.officielebekendmakingen.nl/blg-1256516.pdf');
+  assert.deepEqual(ok.fullTextTerms, ['stikstof']);
+  assert.equal(isPdfUrl(ok.fullTextUrl), true);
+  assert.equal(tooBig.fullTextUrl, undefined, 'te groot: laten liggen');
+  assert.equal(tooLong.fullTextUrl, undefined, 'te veel pagina\'s');
+  assert.equal(noSize.fullTextUrl, undefined, 'grootte onbekend');
+  assert.equal(notPdf.fullTextUrl, undefined);
+  assert.equal(withFragment.fullTextUrl, undefined, 'fragment van de API gaat voor');
+  assert.equal(isPdfUrl('https://zoek.officielebekendmakingen.nl/kst-1.html'), false);
+});
+
+test('extractPdfText: alleen de pagina\'s met de zoekterm; leeg zonder treffer', async () => {
+  const pdf = makePdf(['Inleiding zonder bijzonderheden', 'Het additionaliteitsvereiste geldt voor stikstofruimte', 'Slotwoord']);
+  const text = await extractPdfText(pdf, ['additionaliteit']);
+  assert.match(text, /additionaliteitsvereiste geldt voor stikstofruimte/);
+  assert.doesNotMatch(text, /Inleiding|Slotwoord/);
+  assert.equal(await extractPdfText(pdf, ['kerncentrale']), '');
+  assert.equal(await extractPdfText(new Uint8Array(), ['x']), '');
+  assert.equal(await extractPdfText(new TextEncoder().encode('geen pdf'), ['x']).catch(() => 'fout'), 'fout', 'onleesbaar: fout, door de aanroeper af te vangen');
+});
+
+test('enrichWithFullText: PDF-bijlage krijgt een fragment; te grote, mislukte en onleesbare laten de publicatie ongemoeid', async () => {
+  const realFetch = globalThis.fetch;
+  const pdf = makePdf(['Het additionaliteitsvereiste is hier van toepassing op de stikstofruimte']);
+  const bodies = {
+    'https://zoek.officielebekendmakingen.nl/blg-1.pdf': new Response(pdf, { headers: { 'content-type': 'application/pdf', 'content-length': String(pdf.length) } }),
+    'https://zoek.officielebekendmakingen.nl/blg-2.pdf': new Response('x', { status: 503 }),
+    'https://zoek.officielebekendmakingen.nl/blg-3.pdf': new Response('x', { headers: { 'content-length': String(40 * 1024 * 1024) } }),
+    'https://zoek.officielebekendmakingen.nl/blg-4.pdf': new Response('geen pdf', { headers: { 'content-type': 'application/pdf' } }),
+  };
+  globalThis.fetch = async (url) => bodies[url] ?? new Response('', { status: 404 });
+  try {
+    const make = (n) => ({
+      title: `Bijlage ${n}`,
+      description: 'Standaardomschrijving',
+      fullTextUrl: `https://zoek.officielebekendmakingen.nl/blg-${n}.pdf`,
+      fullTextTerms: ['additionaliteit'],
+    });
+    const pubs = [make(1), make(2), make(3), make(4)];
+    const outcome = await enrichPdf(pubs, undefined, { extractPdfText });
+    assert.deepEqual(outcome, { attempted: 0, enriched: 0, pdfAttempted: 4, pdfEnriched: 1 });
+    assert.match(pubs[0].description, /^Standaardomschrijving — .*additionaliteitsvereiste.*stikstofruimte/);
+    for (const pub of pubs.slice(1)) assert.equal(pub.description, 'Standaardomschrijving');
+
+    // Zonder extractor worden PDF's niet eens geprobeerd.
+    const skipped = make(1);
+    assert.deepEqual(await enrichPdf([skipped]), { attempted: 0, enriched: 0, pdfAttempted: 0, pdfEnriched: 0 });
+    assert.equal(skipped.description, 'Standaardomschrijving');
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});

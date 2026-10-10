@@ -35,6 +35,7 @@ import {
 import { withKeepalive } from './keepalive.js';
 import { hasPermissionFor, missingOrigins } from './permissions.js';
 import { FULLTEXT_ORIGIN, enrichWithFullText } from '../network/open-overheid.js';
+import { extractPdfText } from '../network/pdf-text.js';
 
 import { setProgress, getProgress, recoverInterruptedScans } from './scan-progress.js';
 
@@ -274,8 +275,10 @@ async function executeScan(profileId, options) {
       if (await hasPermissionFor(FULLTEXT_ORIGIN)) {
         const total = Math.min(withoutFragment.length, AppConfig.FULLTEXT_MAX_PER_SCAN);
         setProgress(profileId, { phase: 'fulltext', done: 0, total });
-        const outcome = await enrichWithFullText(withoutFragment, (done) =>
-          setProgress(profileId, { phase: 'fulltext', done, total }),
+        const outcome = await enrichWithFullText(
+          withoutFragment,
+          (done) => setProgress(profileId, { phase: 'fulltext', done, total }),
+          { extractPdfText },
         );
         fullText = { status: 'used', ...outcome };
       } else {
