@@ -156,7 +156,7 @@ export async function renderProfileEdit(profileId) {
   const syncAutoState = () => {
     intervalSelect.disabled = !autoCheckbox.checked;
     autoHint.textContent = autoCheckbox.checked
-      ? `Dit profiel wordt hooguit elke ${intervalSelect.selectedOptions[0].textContent.toLowerCase()} automatisch gescand en gesynthetiseerd. De klok loopt vanaf de laatste scan, dus een handmatige scan schuift hem mee.`
+      ? `Dit profiel wordt hooguit ${intervalSelect.selectedOptions[0].textContent.toLowerCase()} automatisch gescand en gesynthetiseerd. De klok loopt vanaf de laatste scan, dus een handmatige scan schuift hem mee.`
       : 'Dit profiel wordt alleen gescand als je op Scan klikt.';
   };
   autoCheckbox.addEventListener('change', () => {

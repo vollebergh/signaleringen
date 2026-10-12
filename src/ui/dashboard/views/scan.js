@@ -22,46 +22,49 @@ export async function renderScan(profileId, scanId) {
   const { scan, relevant, possible = [], filtered, synthesis } = results;
   const root = el('div');
 
+  // Element.append() maakt van null de tekst "null"; daarom eerst filteren.
   root.append(
-    el('div', { class: 'breadcrumb' }, [
-      el('button', {
-        class: 'icon',
-        text: '← Profielen',
-        onclick: () => {
-          location.hash = '#profielen';
-        },
-      }),
-    ]),
-    el('h2', { text: profile?.name ?? 'Scan' }),
-    el('div', { class: 'scan-meta' }, [
-      el('span', { class: 'badge', text: formatDateTime(scan.scanDate) }),
-      el('span', { class: 'badge', text: `${scan.totalFetched} opgehaald` }),
-      scan.lookbackDays
-        ? el('span', { class: 'badge', title: 'Terugkijktijd van het profiel bij deze scan', text: `${scan.lookbackDays} dagen terug` })
-        : null,
-      el('span', { class: 'badge', text: `${scan.newCount ?? 0} nieuw` }),
-      el('span', { class: 'badge ok', text: `${relevant.length} relevant` }),
-      possible.length > 0 ? el('span', { class: 'badge', text: `${possible.length} mogelijk` }) : null,
-      el('span', { class: 'badge', text: `${filtered.length} weggefilterd` }),
-    ]),
-    scan.onlyNewPublications
-      ? el('p', {
-          class: 'muted',
-          text: `Beoordeeld: alleen de ${scan.evaluatedCount ?? 0} publicatie(s) die dit profiel nog niet eerder ophaalde. De rest was al bekend.`,
-        })
-      : el('p', {
-          class: 'muted',
-          text: `Beoordeeld: alle ${scan.evaluatedCount ?? scan.totalFetched} opgehaalde publicaties, ook eerder geziene.`,
+    ...[
+      el('div', { class: 'breadcrumb' }, [
+        el('button', {
+          class: 'icon',
+          text: '← Profielen',
+          onclick: () => {
+            location.hash = '#profielen';
+          },
         }),
-    fullTextNote(scan),
-    prefilterNote(scan),
-    scan.unjudgedCount
-      ? el('p', {
-          class: 'error',
-          text: `${scan.unjudgedCount} publicatie(s) kregen geen oordeel: het model gaf ook na nieuwe pogingen geen leesbaar antwoord. Ze staan niet bij de resultaten en worden bij de volgende scan opnieuw aangeboden.`,
-        })
-      : null,
-    sourceStatusSection(scan.sourceStatuses ?? []),
+      ]),
+      el('h2', { text: profile?.name ?? 'Scan' }),
+      el('div', { class: 'scan-meta' }, [
+        el('span', { class: 'badge', text: formatDateTime(scan.scanDate) }),
+        el('span', { class: 'badge', text: `${scan.totalFetched} opgehaald` }),
+        scan.lookbackDays
+          ? el('span', { class: 'badge', title: 'Terugkijktijd van het profiel bij deze scan', text: `${scan.lookbackDays} dagen terug` })
+          : null,
+        el('span', { class: 'badge', text: `${scan.newCount ?? 0} nieuw` }),
+        el('span', { class: 'badge ok', text: `${relevant.length} relevant` }),
+        possible.length > 0 ? el('span', { class: 'badge', text: `${possible.length} mogelijk` }) : null,
+        el('span', { class: 'badge', text: `${filtered.length} weggefilterd` }),
+      ]),
+      scan.onlyNewPublications
+        ? el('p', {
+            class: 'muted',
+            text: `Beoordeeld: alleen de ${scan.evaluatedCount ?? 0} publicatie(s) die dit profiel nog niet eerder ophaalde. De rest was al bekend.`,
+          })
+        : el('p', {
+            class: 'muted',
+            text: `Beoordeeld: alle ${scan.evaluatedCount ?? scan.totalFetched} opgehaalde publicaties, ook eerder geziene.`,
+          }),
+      fullTextNote(scan),
+      prefilterNote(scan),
+      scan.unjudgedCount
+        ? el('p', {
+            class: 'error',
+            text: `${scan.unjudgedCount} publicatie(s) kregen geen oordeel: het model gaf ook na nieuwe pogingen geen leesbaar antwoord. Ze staan niet bij de resultaten en worden bij de volgende scan opnieuw aangeboden.`,
+          })
+        : null,
+      sourceStatusSection(scan.sourceStatuses ?? []),
+    ].filter(Boolean),
   );
 
   // ── Signalering ───────────────────────────────────────────────────────────
@@ -80,17 +83,19 @@ export async function renderScan(profileId, scanId) {
   } else if (synthesis?.text) {
     send(Msg.MARK_SYNTHESIS_READ, { profileId, createdAt: synthesis.createdAt }).catch(() => {});
     root.append(
-      synthesis.selection && synthesis.selection.used < synthesis.selection.relevant
-        ? el('p', { class: 'muted', text: `Gebaseerd op de ${synthesis.selection.used} hoogst scorende van ${synthesis.selection.relevant} relevante publicaties.` })
-        : null,
-      el('div', { class: 'synthesis', text: synthesis.text }),
-      el('div', { class: 'actions', style: 'margin-top:10px' }, [
-        el('button', {
-          text: 'Kopiëren',
-          onclick: (event) => copySynthesis(synthesis, profile, event.currentTarget),
-        }),
-      ]),
-      sourceReferences(synthesis.sources),
+      ...[
+        synthesis.selection && synthesis.selection.used < synthesis.selection.relevant
+          ? el('p', { class: 'muted', text: `Gebaseerd op de ${synthesis.selection.used} hoogst scorende van ${synthesis.selection.relevant} relevante publicaties.` })
+          : null,
+        el('div', { class: 'synthesis', text: synthesis.text }),
+        el('div', { class: 'actions', style: 'margin-top:10px' }, [
+          el('button', {
+            text: 'Kopiëren',
+            onclick: (event) => copySynthesis(synthesis, profile, event.currentTarget),
+          }),
+        ]),
+        sourceReferences(synthesis.sources),
+      ].filter(Boolean),
     );
   } else {
     root.append(

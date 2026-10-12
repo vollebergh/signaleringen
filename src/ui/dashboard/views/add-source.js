@@ -55,35 +55,37 @@ export async function renderAddSource() {
   if (isOpenOverheidSearchUrl(url)) typeSelect.value = SourceType.OPEN_OVERHEID;
 
   root.append(
-    el('h2', { text: 'Bron toevoegen' }),
-    el('p', { class: 'muted', text: url }),
-    selection
-      ? el('div', { class: 'card' }, [
-          el('p', { class: 'muted', text: 'Geselecteerde tekst' }),
-          el('p', { text: selection }),
-          el('p', {
-            class: 'hint',
-            text: 'De selectie wordt niet opgeslagen — de bron wordt bij elke scan opnieuw opgehaald.',
-          }),
-        ])
-      : null,
-    el('div', { class: 'field' }, [el('label', { text: 'Naam' }), nameInput]),
-    el('div', { class: 'field' }, [el('label', { text: 'Toevoegen aan profiel' }), profileSelect]),
-    el('div', { class: 'field' }, [el('label', { text: 'Type bron' }), typeSelect]),
-    el('div', { class: 'actions' }, [
-      el('button', {
-        class: 'primary',
-        text: 'Toevoegen',
-        onclick: (event) => addSource(event.currentTarget),
-      }),
-      el('button', {
-        text: 'Annuleren',
-        onclick: () => {
-          location.hash = '#profielen';
-        },
-      }),
-    ]),
-    status,
+    ...[
+      el('h2', { text: 'Bron toevoegen' }),
+      el('p', { class: 'muted', text: url }),
+      selection
+        ? el('div', { class: 'card' }, [
+            el('p', { class: 'muted', text: 'Geselecteerde tekst' }),
+            el('p', { text: selection }),
+            el('p', {
+              class: 'hint',
+              text: 'De selectie wordt niet opgeslagen — de bron wordt bij elke scan opnieuw opgehaald.',
+            }),
+          ])
+        : null,
+      el('div', { class: 'field' }, [el('label', { text: 'Naam' }), nameInput]),
+      el('div', { class: 'field' }, [el('label', { text: 'Toevoegen aan profiel' }), profileSelect]),
+      el('div', { class: 'field' }, [el('label', { text: 'Type bron' }), typeSelect]),
+      el('div', { class: 'actions' }, [
+        el('button', {
+          class: 'primary',
+          text: 'Toevoegen',
+          onclick: (event) => addSource(event.currentTarget),
+        }),
+        el('button', {
+          text: 'Annuleren',
+          onclick: () => {
+            location.hash = '#profielen';
+          },
+        }),
+      ]),
+      status,
+    ].filter(Boolean),
   );
 
   async function addSource(button) {

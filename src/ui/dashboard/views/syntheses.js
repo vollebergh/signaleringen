@@ -80,28 +80,30 @@ function synthesisCard(synthesis, profile, expanded) {
   ]);
 
   details.append(
-    summary,
-    ...(synthesis.warnings ?? []).map((warning) => el('p', { class: 'error', text: `⚠ ${warning}` })),
-    synthesis.selection && synthesis.selection.used < synthesis.selection.relevant
-      ? el('p', {
-          class: 'muted',
-          text: `Gebaseerd op de ${synthesis.selection.used} hoogst scorende van ${synthesis.selection.relevant} relevante publicaties.`,
-        })
-      : null,
-    el('div', { class: 'synthesis', text: synthesis.text }),
-    el('div', { class: 'actions', style: 'margin-top:10px' }, [
-      el('button', {
-        text: 'Kopiëren',
-        onclick: (event) => copy(synthesis, profile, event.currentTarget),
-      }),
-      el('button', {
-        text: 'Naar de publicaties',
-        onclick: () => {
-          location.hash = `#profiel/${profile.id}/scan/${synthesis.scanId}`;
-        },
-      }),
-    ]),
-    sourceReferences(synthesis.sources),
+    ...[
+      summary,
+      ...(synthesis.warnings ?? []).map((warning) => el('p', { class: 'error', text: `⚠ ${warning}` })),
+      synthesis.selection && synthesis.selection.used < synthesis.selection.relevant
+        ? el('p', {
+            class: 'muted',
+            text: `Gebaseerd op de ${synthesis.selection.used} hoogst scorende van ${synthesis.selection.relevant} relevante publicaties.`,
+          })
+        : null,
+      el('div', { class: 'synthesis', text: synthesis.text }),
+      el('div', { class: 'actions', style: 'margin-top:10px' }, [
+        el('button', {
+          text: 'Kopiëren',
+          onclick: (event) => copy(synthesis, profile, event.currentTarget),
+        }),
+        el('button', {
+          text: 'Naar de publicaties',
+          onclick: () => {
+            location.hash = `#profiel/${profile.id}/scan/${synthesis.scanId}`;
+          },
+        }),
+      ]),
+      sourceReferences(synthesis.sources),
+    ].filter(Boolean),
   );
 
   return details;

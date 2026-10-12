@@ -69,19 +69,28 @@ chrome.permissions.onRemoved?.addListener((removed) => {
   }
 });
 
-chrome.permissions.onAdded?.addListener((added) => {
-  if (added.permissions?.includes('alarms')) {
-    applySchedule().catch((err) => log.warn('Planner instellen mislukt', err));
-  }
-});
-
 // `chrome.alarms` bestaat alleen zodra de optionele permissie verleend is.
-if (chrome.alarms) {
+// Is ze er bij het laden nog niet, dan registreren we de listener alsnog bij
+// het verlenen: zonder listener wekt de browser een gestopte worker niet voor
+// het alarm en blijft de planner stil tot de worker opnieuw start.
+let alarmListenerRegistered = false;
+function registerAlarmListener() {
+  if (alarmListenerRegistered || !chrome.alarms) return;
+  alarmListenerRegistered = true;
   chrome.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name !== ALARM_NAME) return;
     runDueScans().catch((err) => log.error('Automatische synthese mislukt', err));
   });
 }
+
+chrome.permissions.onAdded?.addListener((added) => {
+  if (added.permissions?.includes('alarms')) {
+    registerAlarmListener();
+    applySchedule().catch((err) => log.warn('Planner instellen mislukt', err));
+  }
+});
+
+registerAlarmListener();
 
 // Klik op het extensiepictogram opent de popup; het side panel is los te openen.
 if (chrome.sidePanel?.setPanelBehavior) {
