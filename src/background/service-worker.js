@@ -96,11 +96,15 @@ registerAlarmListener();
 // Instellingen en keys alleen leesbaar voor extensiepagina's en de worker,
 // niet voor content scripts, mocht er ooit een bijkomen (S-12). Firefox kent
 // `setAccessLevel` niet.
-chrome.storage.local.setAccessLevel?.({ accessLevel: 'TRUSTED_CONTEXTS' }).catch(() => {});
+chrome.storage.local
+  .setAccessLevel?.({ accessLevel: 'TRUSTED_CONTEXTS' })
+  .catch((err) => log.warn('Opslag afschermen voor content scripts mislukt', err));
 
 // Klik op het extensiepictogram opent de popup; het side panel is los te openen.
 if (chrome.sidePanel?.setPanelBehavior) {
-  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(() => {});
+  chrome.sidePanel
+    .setPanelBehavior({ openPanelOnActionClick: false })
+    .catch((err) => log.warn('Gedrag van het zijpaneel instellen mislukt', err));
 }
 
 // ── Contextmenu ─────────────────────────────────────────────────────────────

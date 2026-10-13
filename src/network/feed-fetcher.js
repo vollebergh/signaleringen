@@ -169,6 +169,7 @@ export function stripHtml(html) {
  * `<div>` erin). Per veld telt het eerste niet-lege element.
  */
 const ENTRY_FIELDS = {
+  __proto__: null, // elementnamen komen uit de feed
   title: 'title',
   description: 'description',
   summary: 'description',
@@ -303,6 +304,7 @@ const RFC822 =
   /^(?:\w{3},\s*)?(\d{1,2})\s+(\w{3})\s+(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?\s*(.*)$/;
 
 const MONTHS = {
+  __proto__: null,
   jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
   jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
 };

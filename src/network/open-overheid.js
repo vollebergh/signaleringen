@@ -67,6 +67,7 @@ export function parseApiDate(text) {
 
 /** Meeschuivende periodes zoals de site ze aanbiedt, terug vanaf `now`. */
 const RELATIVE_PERIODS = {
+  __proto__: null, // de sleutel komt uit de URL
   'Afgelopen week': (d) => d.setDate(d.getDate() - 7),
   'Afgelopen maand': (d) => d.setMonth(d.getMonth() - 1),
   'Afgelopen jaar': (d) => d.setFullYear(d.getFullYear() - 1),

@@ -42,7 +42,7 @@ test('parseXml herkent attributen, zelfsluitende tags en CDATA', () => {
   parseXml(
     `<root><link href="https://example.com/a" rel="alternate"/><t><![CDATA[ruwe <b>tekst</b>]]></t></root>`,
     {
-      onStart: (name, attrs) => events.push(['start', name, attrs]),
+      onStart: (name, attrs) => events.push(['start', name, { ...attrs }]),
       onEnd: (name) => events.push(['end', name]),
       onText: (text) => events.push(['text', text]),
     },

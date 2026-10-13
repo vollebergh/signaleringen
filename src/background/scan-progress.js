@@ -33,11 +33,15 @@ function enqueue(task) {
 
 const keyFor = (profileId) => `${PREFIX}${profileId}`;
 
+/** Geen open UI-vlak dat luistert: de gewone toestand, geen fout. */
+export const isNoReceiverError = (err) => /Receiving end does not exist/i.test(err?.message ?? '');
+
 function broadcast(profileId, state) {
-  // Faalt stil als er geen UI-vlak luistert.
   chrome.runtime
     .sendMessage({ type: Msg.SCAN_PROGRESS, payload: { profileId, ...state } })
-    .catch(() => {});
+    .catch((err) => {
+      if (!isNoReceiverError(err)) log.warn('Scanvoortgang melden mislukt', err);
+    });
 }
 
 /** Legt de voortgang vast en meldt hem aan open UI-vlakken. */

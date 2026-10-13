@@ -5,6 +5,7 @@
  */
 
 import { Msg, send } from '../../core/messages.js';
+import { log } from '../../core/logger.js';
 
 export const $ = (selector, root = document) => root.querySelector(selector);
 export const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -139,6 +140,17 @@ export async function explainScanFailure(profileId, error) {
     /* val terug op de oorspronkelijke melding */
   }
   return error.message;
+}
+
+/**
+ * Meldt dat een signalering is gezien (B-54). Niet wachten: de signalering
+ * staat al in beeld. Mislukt het, dan blijft alleen de teller staan; dat is
+ * geen reden om de gebruiker een fout te tonen, wel om hem te loggen.
+ */
+export function markSynthesisRead(profileId, createdAt) {
+  send(Msg.MARK_SYNTHESIS_READ, { profileId, createdAt }).catch((err) =>
+    log.warn('Signalering als gelezen markeren mislukt', err),
+  );
 }
 
 export function clear(node) {

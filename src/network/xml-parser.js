@@ -13,6 +13,8 @@
  */
 
 const NAMED_ENTITIES = {
+  // Zonder prototype: `&constructor;` uit een feed mag geen functie opleveren.
+  __proto__: null,
   amp: '&',
   lt: '<',
   gt: '>',
@@ -54,7 +56,8 @@ export function decodeEntities(text) {
 }
 
 function parseAttributes(raw) {
-  const attrs = {};
+  // Zonder prototype: attribuutnamen komen uit de feed (ook `__proto__`).
+  const attrs = { __proto__: null };
   const pattern = /([\w:.-]+)\s*=\s*("([^"]*)"|'([^']*)')/g;
   let match;
   while ((match = pattern.exec(raw)) !== null) {
@@ -129,7 +132,7 @@ export function parseXml(xml, handler) {
     const body = selfClosing ? inner.slice(0, -1).trim() : inner;
     const spaceAt = body.search(/\s/);
     const rawName = spaceAt === -1 ? body : body.slice(0, spaceAt);
-    const attrs = spaceAt === -1 ? {} : parseAttributes(body.slice(spaceAt + 1));
+    const attrs = spaceAt === -1 ? { __proto__: null } : parseAttributes(body.slice(spaceAt + 1));
     const name = localName(rawName);
 
     if (onStart) onStart(name, attrs, rawName);

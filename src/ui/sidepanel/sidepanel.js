@@ -5,7 +5,7 @@
  */
 
 import { Msg, send } from '../../core/messages.js';
-import { $, el, clear, sourceReferences, applyTheme, formatDate, formatDateTime, openUrl, showError, progressLabel, showProgress, explainScanFailure } from '../shared/dom.js';
+import { $, el, clear, sourceReferences, applyTheme, formatDate, formatDateTime, openUrl, showError, progressLabel, showProgress, explainScanFailure, markSynthesisRead } from '../shared/dom.js';
 
 const content = $('#content');
 const profileSelect = $('#profile-select');
@@ -114,7 +114,7 @@ async function loadLatest() {
         content.append(el('p', { class: 'muted', text: `Gebaseerd op de ${selection.used} hoogst scorende van ${selection.relevant} relevante publicaties.` }));
       }
       content.append(el('div', { class: 'synthesis', text: latest.synthesis.text }));
-      send(Msg.MARK_SYNTHESIS_READ, { profileId, createdAt: latest.synthesis.createdAt }).catch(() => {});
+      markSynthesisRead(profileId, latest.synthesis.createdAt);
       const references = sourceReferences(latest.synthesis.sources);
       if (references) content.append(references);
     } else if (latest.synthesis?.error) {

@@ -16,6 +16,8 @@ const PING_INTERVAL_MS = 20_000;
 function start() {
   if (handle !== null) return;
   handle = setInterval(() => {
+    // Alleen de aanroep telt (hij houdt de worker wakker); het antwoord en een
+    // eventuele fout doen er niet toe.
     chrome.runtime.getPlatformInfo().catch(() => {});
   }, PING_INTERVAL_MS);
 }

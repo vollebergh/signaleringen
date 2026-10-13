@@ -6,6 +6,7 @@
 
 import { Msg, send } from '../../core/messages.js';
 import { isLocalBaseUrl } from '../../core/models.js';
+import { log } from '../../core/logger.js';
 import { $, el, clear, applyTheme, formatDateTime, showError, progressLabel, showProgress, explainScanFailure } from '../shared/dom.js';
 
 const content = $('#content');
@@ -27,7 +28,9 @@ async function init() {
     .then((win) => {
       currentWindowId = win.id;
     })
-    .catch(() => {});
+    // Zonder venster-id opent de knop voor het zijpaneel niets; de rest van
+    // de popup werkt gewoon.
+    .catch((err) => log.warn('Huidig venster onbekend', err));
 
   $('#open-dashboard').addEventListener('click', () => {
     chrome.runtime.openOptionsPage();
@@ -39,7 +42,7 @@ async function init() {
     // gebruikersgebaar, dus geen `await` vóór de aanroep.
     const sidebar = globalThis.browser?.sidebarAction;
     if (!chrome.sidePanel && sidebar) {
-      sidebar.open().catch(() => {});
+      sidebar.open().catch((err) => log.warn('Zijbalk openen mislukt', err));
     } else {
       if (currentWindowId === null) return;
       chrome.sidePanel.open({ windowId: currentWindowId });

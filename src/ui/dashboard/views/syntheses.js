@@ -8,7 +8,7 @@
  */
 
 import { Msg, send } from '../../../core/messages.js';
-import { el, sourceReferences, formatDateTime } from '../../shared/dom.js';
+import { el, sourceReferences, formatDateTime, markSynthesisRead } from '../../shared/dom.js';
 
 export async function renderSyntheses(profileId) {
   const [profile, syntheses] = await Promise.all([
@@ -58,7 +58,7 @@ export async function renderSyntheses(profileId) {
   });
 
   // De nieuwste staat open, dus die is gezien (B-54).
-  send(Msg.MARK_SYNTHESIS_READ, { profileId, createdAt: syntheses[0].createdAt }).catch(() => {});
+  markSynthesisRead(profileId, syntheses[0].createdAt);
 
   return root;
 }

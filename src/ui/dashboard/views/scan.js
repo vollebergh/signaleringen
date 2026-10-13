@@ -9,7 +9,8 @@
 
 import { Msg, send } from '../../../core/messages.js';
 import { FULLTEXT_ORIGIN } from '../../../network/open-overheid.js';
-import { el, sourceReferences, formatDate, formatDateTime, openUrl } from '../../shared/dom.js';
+import { log } from '../../../core/logger.js';
+import { el, sourceReferences, formatDate, formatDateTime, openUrl, markSynthesisRead } from '../../shared/dom.js';
 
 export async function renderScan(profileId, scanId) {
   const [profile, results] = await Promise.all([
@@ -81,7 +82,7 @@ export async function renderScan(profileId, scanId) {
       }),
     );
   } else if (synthesis?.text) {
-    send(Msg.MARK_SYNTHESIS_READ, { profileId, createdAt: synthesis.createdAt }).catch(() => {});
+    markSynthesisRead(profileId, synthesis.createdAt);
     root.append(
       ...[
         // Waarschuwingen over de bronverwijzingen (B-44), zoals in de lijst
@@ -297,7 +298,7 @@ function publicationRow(result) {
                   result.isRead = true;
                   row.classList.add('read');
                 })
-                .catch(() => {});
+                .catch((err) => log.warn('Publicatie als gelezen markeren mislukt', err));
             },
           })
         : null,
