@@ -1,0 +1,15 @@
+{
+  "name": "signaleringen-extension",
+  "private": true,
+  "description": "Alleen voor de tests; de extensie zelf heeft geen npm-afhankelijkheden en geen buildstap.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "6.2.5"
+  }
+}

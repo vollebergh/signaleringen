@@ -401,8 +401,14 @@ privacybeleid en de datadeclaratie hoort te staan.
 ## Tests
 
 ```bash
-node --test test/*.test.mjs
+npm ci          # eenmalig: alleen fake-indexeddb, voor test/scan.test.mjs
+npm test        # = node --test test/*.test.mjs
 ```
+
+De extensie zelf heeft geen npm-afhankelijkheden en geen buildstap.
+`package.json` bestaat alleen voor de tests: `fake-indexeddb` staat exact
+vastgezet met een lockfile, en `.npmrc` zet install-scripts uit. `node_modules/`
+hoort niet in een uitrolpakket.
 
 Dekt de XML-pull-parser, feed-mapping (RSS 2.0 en Atom), datumherkenning,
 HTML-stripping, OPML-import, de reparatie van afgekapte LLM-antwoorden, de
@@ -412,7 +418,11 @@ bronmateriaal in de prompt en de voorfilter met nagebootste Jev-antwoorden
 scanresultaten of een lek leidt. Daarnaast de berichtrouter, het ontdubbelen
 binnen een scan, wat er van de instellingen wordt opgeslagen, de grenzen op
 antwoorden, de https-eis, de controle van bronnen en de import
-(`test/worker.test.mjs` en `test/hardening.test.mjs`).
+(`test/worker.test.mjs` en `test/hardening.test.mjs`), sleutels uit een
+feed die op het prototype van een object vallen (`test/js-protocol.test.mjs`),
+en de scan als geheel tegen een echte IndexedDB: ontdubbelen, wat als gezien
+telt, een mislukte bron of synthese, en het opruimen van de
+gezien-administratie (`test/scan.test.mjs`).
 
 ## Relevant, mogelijk relevant, weggefilterd
 

@@ -4,3 +4,4 @@ local-settings.json
 
 # Uitrolpakketten
 dist/
+node_modules/
