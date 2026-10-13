@@ -280,6 +280,24 @@ test('scan: twee keer starten geeft dezelfde lopende scan', async () => {
   assert.equal((await getScansForProfile(profile.id)).length, 1);
 });
 
+test('scan: zonder bronnen of zonder toestemming stopt de scan vóór het ophalen', async () => {
+  const empty = await profileWith([]);
+  await assert.rejects(runScan(empty.id), /nog geen bronnen/);
+  assert.equal(progressMessages.at(-1).phase, 'error');
+
+  const a = feed([item('i1')]);
+  const profile = await profileWith([a]);
+  const real = chrome.permissions.contains;
+  chrome.permissions.contains = async () => false;
+  try {
+    await assert.rejects(runScan(profile.id), /Geen toestemming voor 1 host/);
+    assert.deepEqual(progressMessages.at(-1).blockedOrigins, ['https://feed' + feedCounter + '.example/*']);
+  } finally {
+    chrome.permissions.contains = real;
+  }
+  assert.equal((await getScansForProfile(profile.id)).length, 0);
+});
+
 // ── CR-23 punt 3: seen-administratie tegen een echte store ─────────────────
 
 test('recordSeen: bestaande records blijven staan, firstSeenAt verschuift niet', async () => {
