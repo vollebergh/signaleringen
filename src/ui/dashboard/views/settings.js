@@ -8,8 +8,8 @@
 
 import { Msg, send } from '../../../core/messages.js';
 import { el, clear, labelRow } from '../../shared/dom.js';
-import { originPattern } from '../../../background/permissions.js';
-import { QUANTIZATIONS, validateRouting } from '../../../network/llm-client.js';
+import { originPattern } from '../../../core/origins.js';
+import { QUANTIZATIONS, validateRouting } from '../../../core/routing.js';
 import { DefaultSettings } from '../../../core/config.js';
 import { normalizeSynthesisMaxArticles, isLocalBaseUrl } from '../../../core/models.js';
 

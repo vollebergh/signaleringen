@@ -7,8 +7,7 @@
 import { Msg, send } from '../../../core/messages.js';
 import { SourceType, validateSourceUrl } from '../../../core/models.js';
 import { el, clear } from '../../shared/dom.js';
-import { originsForSources } from '../../../background/permissions.js';
-import { isOpenOverheidSearchUrl } from '../../../network/open-overheid.js';
+import { isOpenOverheidSearchUrl, originsForSources } from '../../../core/origins.js';
 
 export async function renderAddSource() {
   const params = new URLSearchParams(location.search);

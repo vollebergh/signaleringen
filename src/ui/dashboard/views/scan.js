@@ -8,7 +8,7 @@
  */
 
 import { Msg, send } from '../../../core/messages.js';
-import { FULLTEXT_ORIGIN } from '../../../network/open-overheid.js';
+import { FULLTEXT_ORIGIN } from '../../../core/origins.js';
 import { log } from '../../../core/logger.js';
 import { el, sourceReferences, formatDate, formatDateTime, openUrl, markSynthesisRead } from '../../shared/dom.js';
 

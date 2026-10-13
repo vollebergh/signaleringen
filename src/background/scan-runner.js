@@ -37,7 +37,8 @@ import {
 import { withKeepalive } from './keepalive.js';
 import { addFetched } from './scan-collect.js';
 import { hasPermissionFor, missingOrigins } from './permissions.js';
-import { FULLTEXT_ORIGIN, enrichWithFullText } from '../network/open-overheid.js';
+import { enrichWithFullText } from '../network/open-overheid.js';
+import { FULLTEXT_ORIGIN } from '../core/origins.js';
 import { extractPdfText } from '../network/pdf-text.js';
 
 import { setProgress, getProgress, recoverInterruptedScans } from './scan-progress.js';

@@ -15,6 +15,7 @@ import { AppConfig } from '../core/config.js';
 import { isLocalBaseUrl } from '../core/models.js';
 import { log } from '../core/logger.js';
 import { fetchBytes, utf8, isTransientStatus } from './http.js';
+import { connectionErrors, parseList } from '../core/routing.js';
 
 /** Praat de extensie rechtstreeks met een lokaal model? (B-67) */
 function isLocal(settings) {
@@ -23,28 +24,6 @@ function isLocal(settings) {
 
 function usesPreset(model) {
   return typeof model === 'string' && model.includes('@preset/');
-}
-
-/**
- * Controleert het adres van het taalmodel of de proxy (S-02): https, of http
- * alleen naar een lokaal adres (B-67). Anders gaat de key of het proxy-token
- * leesbaar over het netwerk. Een leeg adres is hier geen fout; dat meldt
- * `isConfigured`. Geëxporteerd voor de tests, het instellingenscherm en de worker.
- * @returns {string[]} foutmeldingen, leeg als het adres in orde is
- */
-export function connectionErrors(settings) {
-  const label = settings?.transport === 'proxy' ? 'Proxy-adres' : 'Base-URL';
-  const value = String((settings?.transport === 'proxy' ? settings.proxyUrl : settings?.directBaseUrl) ?? '').trim();
-  if (!value) return [];
-  let url;
-  try {
-    url = new URL(value);
-  } catch {
-    return [`${label}: geen geldig adres`];
-  }
-  if (url.protocol === 'https:') return [];
-  if (url.protocol === 'http:' && isLocalBaseUrl(value)) return [];
-  return [`${label}: gebruik https. Alleen een lokaal adres (localhost, privénetwerk, Tailscale) mag http; anders gaat de key onversleuteld over het netwerk.`];
 }
 
 /** Bouwt endpoint en headers op basis van de gekozen transportmodus. */
@@ -124,55 +103,6 @@ async function post(url, headers, body, timeoutMs) {
     throw err;
   }
   return { response: result.response, text: utf8(result.bytes) };
-}
-
-/** Kwantisaties die OpenRouter kent; als achtervoegsel in een providertag. */
-export const QUANTIZATIONS = ['int4', 'int8', 'fp4', 'fp6', 'fp8', 'fp16', 'bf16', 'fp32', 'unknown'];
-
-/** "deepinfra/fp8, Novita" → ['deepinfra/fp8', 'novita']. Geëxporteerd voor de tests. */
-export function parseList(value) {
-  return String(value ?? '')
-    .split(/[\s,]+/)
-    .map((item) => item.trim().toLowerCase())
-    .filter(Boolean);
-}
-
-/**
- * Controleert de routing-instellingen; geeft foutmeldingen terug, leeg als
- * alles klopt. Elke tag is `provider` of `provider/kwantisatie`.
- * Geëxporteerd voor de tests en het instellingenscherm.
- */
-export function validateRouting(settings) {
-  const errors = [];
-  const check = (label, routing) => {
-    for (const tag of parseList(routing)) {
-      const [provider, quantization, ...rest] = tag.split('/');
-      if (!/^[a-z0-9][a-z0-9._-]*$/.test(provider) || rest.length > 0) {
-        errors.push(`${label}: "${tag}" is geen providertag (vorm: provider of provider/kwantisatie, bijv. deepinfra/fp8)`);
-      } else if (quantization !== undefined && !QUANTIZATIONS.includes(quantization)) {
-        errors.push(`${label}: kwantisatie "${quantization}" bestaat niet (kies uit ${QUANTIZATIONS.join(', ')})`);
-      }
-    }
-  };
-  errors.push(...connectionErrors(settings));
-  if (!String(settings.model ?? '').trim()) errors.push('Model: vul een model in');
-  check('Provider-routing', settings.providerRouting);
-  if (settings.fallbackEnabled) {
-    if (!String(settings.fallbackModel ?? '').trim()) errors.push('Uitwijkroute: vul een model in, of zet de uitwijkroute uit');
-    check('Uitwijkroute', settings.fallbackProviderRouting);
-  }
-  if (settings.jevPrefilterEnabled) {
-    let endpointOk = false;
-    try {
-      endpointOk = new URL(String(settings.prefilterEndpoint ?? '').trim()).protocol === 'https:';
-    } catch {
-      endpointOk = false;
-    }
-    if (!endpointOk) errors.push('Voorfilter: het endpoint moet een https-adres zijn');
-    if (!String(settings.prefilterModel ?? '').trim()) errors.push('Voorfilter: vul een model in');
-    check('Voorfilter', settings.prefilterProviderRouting);
-  }
-  return errors;
 }
 
 /**

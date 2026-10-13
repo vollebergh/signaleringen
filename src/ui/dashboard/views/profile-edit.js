@@ -8,8 +8,7 @@ import { AppConfig } from '../../../core/config.js';
 import { Msg, send } from '../../../core/messages.js';
 import { createProfile, createSource, normalizeLookbackDays, SourceType, validateSourceUrl } from '../../../core/models.js';
 import { el, clear, formatDateTime, openUrl } from '../../shared/dom.js';
-import { missingOf, originsForSources } from '../../../background/permissions.js';
-import { FULLTEXT_ORIGIN, isOpenOverheidSearchUrl } from '../../../network/open-overheid.js';
+import { FULLTEXT_ORIGIN, isOpenOverheidSearchUrl, missingOf, originsForSources } from '../../../core/origins.js';
 
 /**
  * Keuzes voor het scaninterval. Een select met vaste stappen in plaats van een

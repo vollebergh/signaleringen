@@ -26,27 +26,13 @@ import { Result } from '../core/result.js';
 import { log } from '../core/logger.js';
 import { fetchBytes, utf8, isTransientStatus, classifyFetchError } from './http.js';
 import { stripHtml } from './text.js';
+import { FULLTEXT_HOST } from '../core/origins.js';
 
-const SITE_HOST = 'open.overheid.nl';
-
-/** Host met de volledige tekst van Kamerstukken (B-60). */
-const FULLTEXT_HOST = 'zoek.officielebekendmakingen.nl';
-export const FULLTEXT_ORIGIN = `https://${FULLTEXT_HOST}/*`;
 const API_BASE = 'https://open.overheid.nl/overheid/openbaarmakingen/api/v0/zoek';
 const PAGE_SIZE = 50;
 
 /** Filters die de site als herhaalde sleutel in de adresbalk zet. */
 const FILTER_PARAMS = ['organisatie', 'documentsoort', 'informatiecategorie', 'thema'];
-
-/** Is dit een zoek-URL van open.overheid.nl, zoals een gebruiker die kopieert? */
-export function isOpenOverheidSearchUrl(url) {
-  try {
-    const parsed = new URL(url);
-    return parsed.hostname === SITE_HOST && parsed.pathname.replace(/\/+$/, '') === '/zoeken';
-  } catch {
-    return false;
-  }
-}
 
 /** Datum in het formaat dat de API verwacht: DD-MM-JJJJ, in lokale tijd. */
 export function formatApiDate(epochMillis) {

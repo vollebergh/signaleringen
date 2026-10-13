@@ -290,8 +290,8 @@ test('mergeSettings: onbekende sleutels en lege waarden uit het lokale bestand t
 
 // ── open.overheid.nl (B-57) ──────────────────────────────────────────────────
 
+import { isOpenOverheidSearchUrl } from '../src/core/origins.js';
 import {
-  isOpenOverheidSearchUrl,
   toApiUrl,
   formatApiDate,
   mapResults,
@@ -437,7 +437,8 @@ test('retryDelay groeit exponentieel, volgt Retry-After en blijft onder het plaf
 
 // ── Uitwijkroute (B-D11) ─────────────────────────────────────────────────────
 
-import { routesFor, validateRouting, parseList } from '../src/network/llm-client.js';
+import { routesFor } from '../src/network/llm-client.js';
+import { validateRouting, parseList } from '../src/core/routing.js';
 
 test('routesFor: standaard model bij DeepInfra met uitwijk naar decart/fp4; preset zonder provider-blok', () => {
   const standard = routesFor(DefaultSettings);
@@ -724,9 +725,8 @@ import {
   extractBodyText,
   snippetAround,
   mapResults as mapOpenOverheid,
-  FULLTEXT_ORIGIN,
 } from '../src/network/open-overheid.js';
-import { originsForSources } from '../src/background/permissions.js';
+import { FULLTEXT_ORIGIN, originsForSources } from '../src/core/origins.js';
 
 test('searchTerms: losse woorden uit de zoek-URL, zonder operatoren en korte woorden', () => {
   assert.deepEqual(searchTerms('https://open.overheid.nl/zoeken?zoeken=additionaliteit'), ['additionaliteit']);
