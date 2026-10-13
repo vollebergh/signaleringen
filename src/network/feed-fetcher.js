@@ -105,8 +105,21 @@ async function fetchRss(source, since) {
     }
     return Result.success(parseFeed(text, source.name, since, finalUrl));
   } catch (err) {
-    return classifyFetchError(err, source.name || source.url);
+    return withRedirectHint(classifyFetchError(err, source.name || source.url), err);
   }
+}
+
+/**
+ * Een bron die doorstuurt naar een host zonder toestemming geeft alleen
+ * "Failed to fetch"; het doeladres is voor de extensie dan niet te zien
+ * (B-66, UI-test ronde 2). Daarom een hint bij elke netwerkfout van fetch.
+ */
+export const REDIRECT_HINT =
+  'Mogelijk stuurt dit adres door naar een andere website, waarvoor de extensie nog geen toestemming heeft. Open het adres in de browser en gebruik het adres uit de adresbalk.';
+
+function withRedirectHint(result, err) {
+  if (!(err instanceof TypeError)) return result;
+  return { ...result, message: `${result.message}. ${REDIRECT_HINT}` };
 }
 
 async function fetchWeb(source) {
@@ -125,7 +138,7 @@ async function fetchWeb(source) {
       }),
     ]);
   } catch (err) {
-    return classifyFetchError(err, source.name || source.url);
+    return withRedirectHint(classifyFetchError(err, source.name || source.url), err);
   }
 }
 

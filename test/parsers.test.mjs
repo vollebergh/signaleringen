@@ -1041,3 +1041,23 @@ test('enrichWithFullText: PDF-bijlage krijgt een fragment; te grote, mislukte en
     globalThis.fetch = realFetch;
   }
 });
+
+test('fetchPublications: netwerkfout krijgt de hint over doorsturen naar een andere host', async () => {
+  const { fetchPublications, REDIRECT_HINT } = await import('../src/network/feed-fetcher.js');
+  const { AppConfig } = await import('../src/core/config.js');
+  const realFetch = globalThis.fetch;
+  const realDelay = AppConfig.RETRY_INITIAL_DELAY_MS;
+  AppConfig.RETRY_INITIAL_DELAY_MS = 1;
+  globalThis.fetch = async () => {
+    throw new TypeError('Failed to fetch');
+  };
+  try {
+    const result = await fetchPublications({ name: 'Substack', url: 'https://x.substack.com/feed', type: 'RSS' }, 0);
+    assert.equal(result.kind, 'networkError');
+    assert.ok(result.message.includes('Failed to fetch'));
+    assert.ok(result.message.endsWith(REDIRECT_HINT));
+  } finally {
+    globalThis.fetch = realFetch;
+    AppConfig.RETRY_INITIAL_DELAY_MS = realDelay;
+  }
+});
