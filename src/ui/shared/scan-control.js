@@ -10,7 +10,7 @@ import { Msg, send } from '../../core/messages.js';
 import { el, clear, showProgress, explainScanFailure } from './dom.js';
 
 /** Spinner met tekst in de statusregel. */
-export function showScanStarting(status, label = 'Scan gestart…') {
+function showScanStarting(status, label = 'Scan gestart…') {
   clear(status);
   status.classList.remove('error');
   status.append(el('span', { class: 'spinner' }), el('span', { text: ` ${label}` }));

@@ -7,7 +7,7 @@
 import { SourceType } from './models.js';
 
 /** De site waarvan de gebruiker een zoek-URL kopieert. */
-export const OPEN_OVERHEID_SITE_HOST = 'open.overheid.nl';
+const OPEN_OVERHEID_SITE_HOST = 'open.overheid.nl';
 
 /** Host met de volledige tekst van Kamerstukken (B-60). */
 export const FULLTEXT_HOST = 'zoek.officielebekendmakingen.nl';

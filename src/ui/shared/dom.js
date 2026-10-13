@@ -39,7 +39,7 @@ export function el(tag, props = {}, children = []) {
  * schermlezer hem via `aria-describedby` voorleest.
  */
 let infoTipCounter = 0;
-export function infoTip(text) {
+function infoTip(text) {
   const id = `info-tip-${++infoTipCounter}`;
   return el('span', { class: 'info-tip', tabindex: '0', role: 'button', 'aria-label': 'Toelichting', 'aria-describedby': id }, [
     el('span', { class: 'info-tip-icon', 'aria-hidden': 'true', text: 'i' }),
@@ -83,7 +83,7 @@ export function progressLabel(p, { withSource = false } = {}) {
  * Vraag bij een grote scan (B-45): doorgaan of stoppen. De scan in de worker
  * wacht op het antwoord; elk open UI-vlak toont dezelfde vraag.
  */
-export function confirmScanPrompt(p) {
+function confirmScanPrompt(p) {
   const status = el('span', { class: 'muted' });
   const answer = async (proceed, button) => {
     button.parentElement.querySelectorAll('button').forEach((b) => {

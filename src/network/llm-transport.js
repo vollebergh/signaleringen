@@ -52,7 +52,7 @@ function resolveEndpoint(settings) {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Fout die het waard is opnieuw te proberen: 429, 5xx of een netwerkfout. */
-export class TransientLlmError extends Error {
+class TransientLlmError extends Error {
   constructor(message, retryAfterMs = null) {
     super(message);
     this.name = 'TransientLlmError';

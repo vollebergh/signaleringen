@@ -149,7 +149,7 @@ export async function markSynthesised(profileId, scanId, keys) {
 // ── Bronstatus ──────────────────────────────────────────────────────────────
 
 /** Alle bronstatussen van een profiel, als Map op bron-id. */
-export async function loadSourceStates(profileId) {
+async function loadSourceStates(profileId) {
   const records = await getAllByIndex(Store.SOURCE_STATE, 'profileId', profileId);
   return new Map(records.map((record) => [record.sourceId, record]));
 }

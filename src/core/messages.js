@@ -74,7 +74,7 @@ const SEND_TIMEOUTS_MS = {
 };
 
 /** Fout bij een bericht waarop binnen de tijd geen antwoord kwam. */
-export class SendTimeoutError extends Error {
+class SendTimeoutError extends Error {
   constructor(seconds) {
     super(`Geen antwoord van de achtergrondservice binnen ${seconds} seconden. Probeer het opnieuw; helpt dat niet, herlaad dan de extensie.`);
     this.name = 'SendTimeoutError';

@@ -30,7 +30,7 @@ import { updateBadge } from './badge.js';
 export const ALARM_NAME = 'signaleringen-auto-synthese';
 
 /** Heeft de gebruiker de optionele `alarms`-permissie verleend? */
-export async function hasAlarmsPermission() {
+async function hasAlarmsPermission() {
   try {
     return await chrome.permissions.contains({ permissions: ['alarms'] });
   } catch {

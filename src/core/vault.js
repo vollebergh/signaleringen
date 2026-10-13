@@ -13,12 +13,12 @@
  * tegen code die draait terwijl de vault ontgrendeld is.
  */
 
-export const VAULT_VERSION = 1;
+const VAULT_VERSION = 1;
 
 /** OWASP-advies voor PBKDF2-HMAC-SHA256 (2023): minstens 600.000 iteraties. */
-export const PBKDF2_ITERATIONS = 600_000;
+const PBKDF2_ITERATIONS = 600_000;
 
-export const MIN_PASSPHRASE_LENGTH = 8;
+const MIN_PASSPHRASE_LENGTH = 8;
 
 const toBase64 = (bytes) => btoa(String.fromCharCode(...new Uint8Array(bytes)));
 const fromBase64 = (text) => Uint8Array.from(atob(text), (c) => c.charCodeAt(0));

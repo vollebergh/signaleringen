@@ -107,7 +107,7 @@ export async function transaction(storeNames, mode, work) {
 }
 
 /** Promisificeert een enkel IDBRequest. */
-export function req(request) {
+function req(request) {
   return new Promise((resolve, reject) => {
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
