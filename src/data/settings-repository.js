@@ -51,10 +51,27 @@ export async function getSettings() {
   return mergeSettings(DefaultSettings, local, stored[KEY]);
 }
 
+/**
+ * Wat er van `next` opgeslagen moet worden: alleen bekende sleutels die
+ * afwijken van standaard ← lokaal bestand (CR-03). Zo komt een key uit
+ * local-settings.json niet in de browseropslag terecht, en verdwijnt hij weer
+ * als hij uit het bestand gaat. Een bewuste afwijking blijft wel staan, ook
+ * een lege waarde: die wint van het bestand (vault, zie hieronder).
+ * Geëxporteerd voor de tests.
+ */
+export function settingsToStore(defaults, local, next) {
+  const base = mergeSettings(defaults, local, {});
+  return Object.fromEntries(
+    Object.entries(next).filter(
+      ([key, value]) => Object.hasOwn(defaults, key) && JSON.stringify(value) !== JSON.stringify(base[key]),
+    ),
+  );
+}
+
 export async function saveSettings(patch) {
-  const current = await getSettings();
+  const [current, local] = await Promise.all([getSettings(), loadLocalDefaults()]);
   const next = { ...current, ...patch };
-  await chrome.storage.local.set({ [KEY]: next });
+  await chrome.storage.local.set({ [KEY]: settingsToStore(DefaultSettings, local, next) });
   log.info('Instellingen opgeslagen');
   return next;
 }

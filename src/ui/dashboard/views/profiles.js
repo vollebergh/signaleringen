@@ -133,9 +133,15 @@ function profileCard(profile) {
       el('button', {
         text: 'Dupliceren',
         onclick: async (event) => {
-          event.currentTarget.disabled = true;
-          await send(Msg.DUPLICATE_PROFILE, { profileId: profile.id });
-          location.reload();
+          const button = event.currentTarget; // na een await is currentTarget leeg
+          button.disabled = true;
+          try {
+            await send(Msg.DUPLICATE_PROFILE, { profileId: profile.id });
+            location.reload();
+          } catch (err) {
+            showActionError(status, `Dupliceren mislukt: ${err.message}`);
+            button.disabled = false;
+          }
         },
       }),
       el('button', {
@@ -146,8 +152,12 @@ function profileCard(profile) {
             `Profiel "${profile.name}" verwijderen? De scangeschiedenis gaat mee.`,
           );
           if (!confirmed) return;
-          await send(Msg.DELETE_PROFILE, { profileId: profile.id });
-          location.reload();
+          try {
+            await send(Msg.DELETE_PROFILE, { profileId: profile.id });
+            location.reload();
+          } catch (err) {
+            showActionError(status, `Verwijderen mislukt: ${err.message}`);
+          }
         },
       }),
     ]),
@@ -230,6 +240,13 @@ export function formatInterval(minutes) {
   if (hours) parts.push(`${hours} uur`);
   if (mins) parts.push(`${mins} min`);
   return parts.join(' ');
+}
+
+/** Foutmelding van een kaartactie in de statusregel van de kaart. */
+function showActionError(status, message) {
+  clear(status);
+  status.classList.add('error');
+  status.textContent = message;
 }
 
 /** Afgebroken scan: melding plus een knop om opnieuw te scannen. */

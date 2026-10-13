@@ -84,6 +84,9 @@ export async function renderScan(profileId, scanId) {
     send(Msg.MARK_SYNTHESIS_READ, { profileId, createdAt: synthesis.createdAt }).catch(() => {});
     root.append(
       ...[
+        // Waarschuwingen over de bronverwijzingen (B-44), zoals in de lijst
+        // met signaleringen en het zijpaneel (CR-11).
+        ...(synthesis.warnings ?? []).map((warning) => el('p', { class: 'error', text: `⚠ ${warning}` })),
         synthesis.selection && synthesis.selection.used < synthesis.selection.relevant
           ? el('p', { class: 'muted', text: `Gebaseerd op de ${synthesis.selection.used} hoogst scorende van ${synthesis.selection.relevant} relevante publicaties.` })
           : null,
@@ -243,9 +246,13 @@ function publicationRow(result) {
     text: result.isBookmarked ? '★ Bewaard' : '☆ Bewaren',
     onclick: async () => {
       const next = !result.isBookmarked;
-      await send(Msg.TOGGLE_BOOKMARK, { publicationId: result.id, bookmarked: next });
-      result.isBookmarked = next;
-      bookmarkButton.textContent = next ? '★ Bewaard' : '☆ Bewaren';
+      try {
+        await send(Msg.TOGGLE_BOOKMARK, { publicationId: result.id, bookmarked: next });
+        result.isBookmarked = next;
+        bookmarkButton.textContent = next ? '★ Bewaard' : '☆ Bewaren';
+      } catch {
+        bookmarkButton.textContent = 'Bewaren mislukt';
+      }
     },
   });
 
@@ -281,13 +288,16 @@ function publicationRow(result) {
         ? el('button', {
             class: 'icon',
             text: 'Openen',
-            onclick: async () => {
-              if (!result.isRead) {
-                await send(Msg.MARK_AS_READ, { publicationId: result.id });
-                result.isRead = true;
-                row.classList.add('read');
-              }
+            onclick: () => {
+              // Eerst openen: een mislukte markering mag de link niet tegenhouden.
               openUrl(pub.url);
+              if (result.isRead) return;
+              send(Msg.MARK_AS_READ, { publicationId: result.id })
+                .then(() => {
+                  result.isRead = true;
+                  row.classList.add('read');
+                })
+                .catch(() => {});
             },
           })
         : null,

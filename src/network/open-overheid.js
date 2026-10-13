@@ -421,8 +421,11 @@ export async function fetchOpenOverheid(source, since) {
       const page = mapResults(json, source.name, terms);
       publications.push(...page);
 
+      // Aantal op deze pagina vóór het filter op titel en URL: één resultaat
+      // zonder titel mag het bladeren niet stoppen (CR-06).
+      const onPage = json?.resultaten?.length ?? 0;
       const total = Number(json?.totaal ?? 0);
-      if (page.length < PAGE_SIZE || start + PAGE_SIZE >= total) break;
+      if (onPage < PAGE_SIZE || start + PAGE_SIZE >= total) break;
     }
 
     if (publications.length >= max && since > 0) {

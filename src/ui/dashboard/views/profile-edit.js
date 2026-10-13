@@ -189,18 +189,23 @@ export async function renderProfileEdit(profileId) {
   opmlInput.addEventListener('change', async () => {
     const file = opmlInput.files?.[0];
     if (!file) return;
-    const content = await file.text();
-    const imported = await send(Msg.IMPORT_OPML, { content });
-    const known = new Set(draft.sources.map((s) => s.url));
-    const added = imported.filter((s) => !known.has(s.url));
-    draft.sources.push(...added);
-    opmlInput.value = '';
-    renderSources();
-    setStatus(
-      added.length > 0
-        ? `${added.length} bron(nen) geïmporteerd uit OPML`
-        : 'Geen nieuwe bronnen gevonden in dit OPML-bestand',
-    );
+    try {
+      const content = await file.text();
+      const imported = await send(Msg.IMPORT_OPML, { content });
+      const known = new Set(draft.sources.map((s) => s.url));
+      const added = imported.filter((s) => !known.has(s.url));
+      draft.sources.push(...added);
+      renderSources();
+      setStatus(
+        added.length > 0
+          ? `${added.length} bron(nen) geïmporteerd uit OPML`
+          : 'Geen nieuwe bronnen gevonden in dit OPML-bestand',
+      );
+    } catch (err) {
+      setStatus(`OPML importeren mislukt: ${err.message}`, true);
+    } finally {
+      opmlInput.value = '';
+    }
   });
 
   function renderSources() {
@@ -427,8 +432,12 @@ export async function renderProfileEdit(profileId) {
       return;
     }
     draft.sources = draft.sources.filter((s) => s.url.trim());
-    await send(Msg.SAVE_PROFILE, { profile: draft });
-    location.hash = '#profielen';
+    try {
+      await send(Msg.SAVE_PROFILE, { profile: draft });
+      location.hash = '#profielen';
+    } catch (err) {
+      setStatus(`Opslaan mislukt: ${err.message}`, true);
+    }
   }
 
   root.append(

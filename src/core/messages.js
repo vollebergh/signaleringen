@@ -55,11 +55,47 @@ export const Msg = Object.freeze({
   VAULT_DISABLE: 'vault/disable',
 });
 
+/**
+ * Hoe lang de UI op een antwoord wacht (CR-08). Zonder grens bleef een vlak
+ * eindeloos op "Laden…" staan als er nooit antwoord kwam. Berichten die
+ * netwerkwerk doen, krijgen meer tijd; een scan wacht op zichzelf (de worker
+ * meldt een afgebroken scan via B-46).
+ */
+export const SEND_TIMEOUT_MS = 30_000;
+const SEND_TIMEOUTS_MS = {
+  [Msg.START_SCAN]: null, // geen grens: loopt de hele scan
+  [Msg.TEST_SOURCE]: 120_000, // ophalen met herhaalpogingen, open.overheid tot 4 pagina's
+  [Msg.TEST_CONNECTION]: 150_000, // één LLM-aanroep, time-out 120 s
+  [Msg.TEST_PREFILTER]: 60_000,
+  [Msg.EXPORT_PROFILES]: 120_000,
+  [Msg.IMPORT_PREVIEW]: 120_000,
+  [Msg.IMPORT_PROFILES]: 120_000,
+};
+
+/** Fout bij een bericht waarop binnen de tijd geen antwoord kwam. */
+export class SendTimeoutError extends Error {
+  constructor(seconds) {
+    super(`Geen antwoord van de achtergrondservice binnen ${seconds} seconden. Probeer het opnieuw; helpt dat niet, herlaad dan de extensie.`);
+    this.name = 'SendTimeoutError';
+    this.timedOut = true;
+  }
+}
+
+function withDeadline(promise, timeoutMs) {
+  if (!timeoutMs) return promise;
+  let timer;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new SendTimeoutError(Math.round(timeoutMs / 1000))), timeoutMs);
+  });
+  return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
+}
+
 /** Verstuurt een bericht naar de service worker en gooit bij een foutantwoord. */
 export async function send(type, payload = {}) {
+  const timeoutMs = type in SEND_TIMEOUTS_MS ? SEND_TIMEOUTS_MS[type] : SEND_TIMEOUT_MS;
   let response;
   try {
-    response = await chrome.runtime.sendMessage({ type, payload });
+    response = await withDeadline(chrome.runtime.sendMessage({ type, payload }), timeoutMs);
   } catch (err) {
     // Stopt de worker terwijl hij nog moet antwoorden, dan sluit Edge het
     // kanaal met een kale Engelse fout (B-46).

@@ -36,9 +36,14 @@ export async function renderBookmarks() {
         el('button', {
           class: 'icon',
           text: 'Verwijderen',
-          onclick: async () => {
-            await send(Msg.TOGGLE_BOOKMARK, { publicationId: result.id, bookmarked: false });
-            row.remove();
+          onclick: async (event) => {
+            const button = event.currentTarget; // na een await is currentTarget leeg
+            try {
+              await send(Msg.TOGGLE_BOOKMARK, { publicationId: result.id, bookmarked: false });
+              row.remove();
+            } catch {
+              button.textContent = 'Verwijderen mislukt';
+            }
           },
         }),
       ]),

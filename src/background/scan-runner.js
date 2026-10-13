@@ -26,13 +26,13 @@ import { normalizeLookbackDays, normalizeSynthesisMaxArticles } from '../core/mo
 import { saveScan, saveSynthesis, pruneOldScans } from '../data/scan-repository.js';
 import { markUnread } from '../data/unread-repository.js';
 import {
-  dedupeKey,
   loadSeen,
   recordSeen,
   markSynthesised,
   recordSourceFetch,
 } from '../data/history-repository.js';
 import { withKeepalive } from './keepalive.js';
+import { addFetched } from './scan-collect.js';
 import { hasPermissionFor, missingOrigins } from './permissions.js';
 import { FULLTEXT_ORIGIN, enrichWithFullText } from '../network/open-overheid.js';
 import { extractPdfText } from '../network/pdf-text.js';
@@ -173,6 +173,7 @@ async function executeScan(profileId, options) {
     const seen = await loadSeen(profileId);
 
     const fetched = []; // { publication, key, isNew, seenRecord }
+    const keysInScan = new Set(); // ontdubbelen over bronnen heen (CR-02)
     const sourceStatuses = [];
 
     for (const [index, source] of sources.entries()) {
@@ -186,12 +187,9 @@ async function executeScan(profileId, options) {
       const result = await fetchPublications(source, since);
 
       if (Result.isSuccess(result)) {
-        let newCount = 0;
-        for (const publication of result.data) {
-          const key = dedupeKey(publication);
-          const seenRecord = seen.get(key) ?? null;
-          if (!seenRecord) newCount += 1;
-          fetched.push({ publication, key, isNew: !seenRecord, seenRecord });
+        const { newCount, duplicates } = addFetched(fetched, result.data, seen, keysInScan);
+        if (duplicates > 0) {
+          log.debug(`Bron '${source.name}': ${duplicates} publicatie(s) stonden al in deze scan`);
         }
 
         sourceStatuses.push({
