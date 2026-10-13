@@ -324,3 +324,29 @@ test('refreshSeen en pruneSeen: weg na 180 dagen niet meer gezien, alleen voor d
   assert.equal((await loadSeen('prune-b')).size, 1, 'ander profiel ongemoeid');
   assert.equal(await pruneSeen('prune-a', later), 0);
 });
+
+// ── Vault en instellingen samen (CR-16 splitst ze) ────────────────────────
+
+test('vault: aanzetten, vergrendelen, ontgrendelen en opheffen', async () => {
+  const { getSettings, isConfigured } = await import('../src/data/settings-repository.js');
+  const { enableVault, lock, unlock, disableVault, withApiKey, getVaultStatus, VaultLockedError } = await import(
+    '../src/data/vault-repository.js'
+  );
+  await saveSettings({ directApiKey: 'sk-vault' });
+
+  await enableVault('lange wachtwoordzin');
+  const stored = await getSettings();
+  assert.equal(stored.directApiKey, '', 'key niet meer leesbaar in de instellingen');
+  assert.equal(await isConfigured(stored), true, 'een vault telt als geconfigureerd');
+  assert.equal((await withApiKey(stored)).directApiKey, 'sk-vault');
+
+  await lock();
+  assert.deepEqual(await getVaultStatus(), { exists: true, unlocked: false, localFileHasKey: false });
+  await assert.rejects(withApiKey(stored), VaultLockedError);
+
+  await unlock('lange wachtwoordzin');
+  await disableVault();
+  assert.equal((await getSettings()).directApiKey, 'sk-vault');
+  assert.equal((await getVaultStatus()).exists, false);
+  await saveSettings({ directApiKey: 'sk-test' });
+});

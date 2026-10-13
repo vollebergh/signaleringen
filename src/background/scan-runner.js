@@ -20,7 +20,8 @@ import {
   selectForSynthesis,
   synthesizeProfile,
 } from '../network/llm-client.js';
-import { getSettings, isConfigured, missingConfigMessage, withApiKey } from '../data/settings-repository.js';
+import { getSettings, isConfigured, missingConfigMessage } from '../data/settings-repository.js';
+import { withApiKey } from '../data/vault-repository.js';
 import { getProfile } from '../data/profile-repository.js';
 import { normalizeLookbackDays, normalizeSynthesisMaxArticles } from '../core/models.js';
 import { saveScan, saveSynthesis, pruneOldScans } from '../data/scan-repository.js';

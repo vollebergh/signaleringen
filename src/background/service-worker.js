@@ -24,16 +24,8 @@ import { Result } from '../core/result.js';
 import * as profiles from '../data/profile-repository.js';
 import * as scans from '../data/scan-repository.js';
 import { getSourceOverview } from '../data/history-repository.js';
-import {
-  getSettings,
-  saveSettings,
-  withApiKey,
-  getVaultStatus,
-  enableVault,
-  unlock,
-  lock,
-  disableVault,
-} from '../data/settings-repository.js';
+import { getSettings, saveSettings } from '../data/settings-repository.js';
+import { withApiKey, getVaultStatus, enableVault, unlock, lock, disableVault } from '../data/vault-repository.js';
 import { markRead } from '../data/unread-repository.js';
 import { exportProfiles, exportFilename, previewImport, importProfiles } from '../data/transfer-repository.js';
 

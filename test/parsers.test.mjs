@@ -800,7 +800,7 @@ test('terugkijktijd: standaard 7 dagen, hele dagen, begrensd', () => {
 
 // ── Vault met twee keys ─────────────────────────────────────────────────────
 
-import { parseVaultSecret } from '../src/data/settings-repository.js';
+import { parseVaultSecret } from '../src/data/vault-repository.js';
 
 test('parseVaultSecret: nieuwe vault met beide keys, oude vault met alleen de kale key', () => {
   assert.deepEqual(parseVaultSecret(JSON.stringify({ directApiKey: 'sk-a', prefilterApiKey: 'sk-b' })), {
