@@ -14,7 +14,7 @@ Signaleringen is een browserextensie die publicaties uit bronnen volgt die u zel
 
 ## Wat de extensie lokaal bewaart
 
-Profielen en hun vragen, bronnen, gevonden publicaties (titel, adres, datum en een kort tekstfragment), scanresultaten, signaleringen, de status gezien/verwerkt en uw instellingen. Dit staat in `chrome.storage.local` en IndexedDB van uw browserprofiel. Het verlaat uw apparaat alleen via de functies hieronder en via de synchronisatie of back-up van uw browser zelf.
+Profielen en hun vragen, bronnen, gevonden publicaties (titel, adres, datum en een kort tekstfragment), scanresultaten, signaleringen, de status gezien/verwerkt en uw instellingen. De status gezien/verwerkt wordt 180 dagen nadat een publicatie voor het laatst in een bron stond, automatisch opgeruimd; scans blijven per profiel de laatste vijf bewaard. Dit staat in `chrome.storage.local` en IndexedDB van uw browserprofiel. Het verlaat uw apparaat alleen via de functies hieronder en via de synchronisatie of back-up van uw browser zelf.
 
 Uw API-key staat in dezelfde opslag. Met de optie *Vault* (Instellingen) versleutelt u hem met een wachtwoordzin (PBKDF2-SHA256, 600.000 iteraties, AES-GCM-256). Zonder vault staat hij onversleuteld en gaat hij mee met synchronisatie en back-ups van uw browser. Een vergeten wachtwoordzin is niet te herstellen.
 

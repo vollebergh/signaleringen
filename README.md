@@ -213,7 +213,9 @@ Een scan kent geen maximum aantal publicaties: je gaat zelf over je
 tokenbudget. Staan er bij een handmatige scan meer dan 200 publicaties klaar om
 te beoordelen, dan vraagt de extensie eerst of je door wilt. Stoppen kost niets
 en verliest niets: die publicaties komen bij de volgende scan terug. De
-automatische planner vraagt dit niet.
+automatische planner vraagt dit niet. Een RSS-bron levert hooguit de nieuwste
+200 items per scan, zoals een open.overheid-bron; dat begrenst de kosten als een
+feed er plotseling duizenden aanbiedt.
 
 Een signalering bundelt hooguit 25 artikelen, de hoogst scorende (instelbaar bij
 Instellingen → Signalering). De overige blijven als relevant in het
@@ -240,15 +242,19 @@ tegenover staat.
 Bij import zie je eerst wat er in het bestand zit. Profielen die al bestaan
 krijgen een keuze: **toevoegen als kopie** (standaard, niets gaat verloren) of
 **vervangen** (wist het bestaande profiel inclusief geschiedenis, met
-bevestiging). Bij een kopie krijgen alle id's nieuwe waarden, zodat de kopie niet
-de scans van het origineel overschrijft.
+bevestiging). Scans en publicaties krijgen bij elke import nieuwe id's; bij een
+kopie ook het profiel en de bronnen. Zo kan een bestand nooit de scans van een
+ander profiel overschrijven. Bronnen met een ander adres dan http(s) worden
+geweigerd.
 
 ## Wat al eerder is opgehaald
 
 Per profiel wordt bijgehouden welke publicaties eerder langskwamen en welke
 daarvan in een signalering zijn verwerkt. Publicaties worden herkend op een
 genormaliseerde URL (tracking-parameters als `utm_*` worden genegeerd), met
-bron + titel als terugval voor feeds zonder link.
+bron + titel als terugval voor feeds zonder link. Die administratie wordt
+opgeruimd 180 dagen nadat een publicatie voor het laatst in een bron stond; wat
+nog in een bron staat, blijft bewaard.
 
 Dat is op drie plekken zichtbaar:
 
@@ -270,7 +276,9 @@ OpenAI-compatibele server, zoals Ollama of LM Studio. Bij Instellingen:
 - **Base-URL**: Ollama `http://localhost:11434/v1`, LM Studio
   `http://localhost:1234/v1`. Een adres op het eigen netwerk (bijv.
   `http://192.168.1.20:11434/v1` of `http://server.local:11434/v1`) of in
-  Tailscale (`http://100.x.x.x:11434/v1`) werkt ook.
+  Tailscale (`http://100.64.0.0/10`, bijv. `http://100.101.1.2:11434/v1`)
+  werkt ook. Voor elk ander adres, ook de proxy, eist de extensie **https**:
+  anders zou je key onversleuteld over het netwerk gaan.
 - **Model**: de lokale modelnaam, bijv. `qwen2.5:3b`.
 - **API-key**: leeg laten; een lokaal adres heeft er geen nodig.
 - Bij het opslaan vraagt de extensie toestemming voor het lokale adres.
@@ -401,7 +409,10 @@ HTML-stripping, OPML-import, de reparatie van afgekapte LLM-antwoorden, de
 vertaling van open.overheid-zoek-URL's, de vault, de afbakening van
 bronmateriaal in de prompt en de voorfilter met nagebootste Jev-antwoorden
 (normaal, fout → terugval, ontbrekende antwoorden) — de onderdelen waar een stille fout tot lege
-scanresultaten of een lek leidt.
+scanresultaten of een lek leidt. Daarnaast de berichtrouter, het ontdubbelen
+binnen een scan, wat er van de instellingen wordt opgeslagen, de grenzen op
+antwoorden, de https-eis, de controle van bronnen en de import
+(`test/worker.test.mjs` en `test/hardening.test.mjs`).
 
 ## Relevant, mogelijk relevant, weggefilterd
 
