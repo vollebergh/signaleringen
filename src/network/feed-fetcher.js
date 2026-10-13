@@ -11,9 +11,8 @@ import { SourceType, createPublication } from '../core/models.js';
 import { log } from '../core/logger.js';
 import { parseXml, decodeEntities } from './xml-parser.js';
 import { fetchBytes, withRetry, isTransientStatus, classifyFetchError } from './http.js';
-// Wederzijdse import: open-overheid.js gebruikt stripHtml hieronder. Veilig,
-// omdat beide kanten de ander pas bij een aanroep nodig hebben.
 import { fetchOpenOverheid } from './open-overheid.js';
+import { stripHtml, truncate } from './text.js';
 
 /**
  * @param {import('../core/models.js').Source} source
@@ -149,19 +148,6 @@ async function fetchWeb(source) {
   }
 }
 
-/** Verwijdert scripts, styles en tags; laat leesbare tekst over. */
-export function stripHtml(html) {
-  return decodeEntities(
-    html
-      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, ' ')
-      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ' ')
-      .replace(/<noscript[^>]*>[\s\S]*?<\/noscript>/gi, ' ')
-      .replace(/<[^>]+>/g, ' '),
-  )
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
 /**
  * Velden van een item/entry, per elementnaam (zonder prefix). Tekst wordt
  * verzameld tot het element sluit, ook over geneste elementen en meerdere
@@ -294,10 +280,6 @@ function resolveUrl(link, baseUrl) {
   } catch {
     return value;
   }
-}
-
-function truncate(text, max) {
-  return text.length > max ? `${text.slice(0, max)}...` : text;
 }
 
 const RFC822 =

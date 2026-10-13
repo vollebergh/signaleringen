@@ -25,7 +25,7 @@ import { createPublication } from '../core/models.js';
 import { Result } from '../core/result.js';
 import { log } from '../core/logger.js';
 import { fetchBytes, utf8, isTransientStatus, classifyFetchError } from './http.js';
-import { stripHtml } from './feed-fetcher.js';
+import { stripHtml } from './text.js';
 
 const SITE_HOST = 'open.overheid.nl';
 

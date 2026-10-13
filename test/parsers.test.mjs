@@ -11,7 +11,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { parseXml, decodeEntities } from '../src/network/xml-parser.js';
-import { parseFeed, parseDate, stripHtml } from '../src/network/feed-fetcher.js';
+import { parseFeed, parseDate } from '../src/network/feed-fetcher.js';
+import { stripHtml } from '../src/network/text.js';
 import {
   repairJsonArray,
   emptyContentMessage,
