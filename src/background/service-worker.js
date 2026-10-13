@@ -18,7 +18,7 @@
 
 import { Msg } from '../core/messages.js';
 import { log } from '../core/logger.js';
-import { createProfile, createSource, SourceType } from '../core/models.js';
+import { assertValidSource, createProfile, createSource, SourceType } from '../core/models.js';
 import { Result } from '../core/result.js';
 
 import * as profiles from '../data/profile-repository.js';
@@ -38,7 +38,7 @@ import { markRead } from '../data/unread-repository.js';
 import { exportProfiles, exportFilename, previewImport, importProfiles } from '../data/transfer-repository.js';
 
 import { fetchPublications } from '../network/feed-fetcher.js';
-import { testConnection, testPrefilter } from '../network/llm-client.js';
+import { connectionErrors, testConnection, testPrefilter } from '../network/llm-client.js';
 
 import { runScan, getProgress, isScanning, confirmScan } from './scan-runner.js';
 import { applySchedule, runDueScans, ALARM_NAME } from './scheduler.js';
@@ -92,6 +92,11 @@ chrome.permissions.onAdded?.addListener((added) => {
 });
 
 registerAlarmListener();
+
+// Instellingen en keys alleen leesbaar voor extensiepagina's en de worker,
+// niet voor content scripts, mocht er ooit een bijkomen (S-12). Firefox kent
+// `setAccessLevel` niet.
+chrome.storage.local.setAccessLevel?.({ accessLevel: 'TRUSTED_CONTEXTS' }).catch(() => {});
 
 // Klik op het extensiepictogram opent de popup; het side panel is los te openen.
 if (chrome.sidePanel?.setPanelBehavior) {
@@ -147,7 +152,12 @@ const handlers = {
 
   [Msg.GET_PROFILE]: ({ profileId }) => profiles.getProfile(profileId),
 
-  [Msg.SAVE_PROFILE]: ({ profile }) => profiles.saveProfile(createProfile(profile)),
+  // Bron-URL's ook hier controleren, niet alleen in de UI (S-05).
+  [Msg.SAVE_PROFILE]: ({ profile }) => {
+    const normalised = createProfile(profile);
+    normalised.sources.forEach(assertValidSource);
+    return profiles.saveProfile(normalised);
+  },
 
   [Msg.DELETE_PROFILE]: async ({ profileId }) => {
     await profiles.deleteProfile(profileId);
@@ -160,6 +170,7 @@ const handlers = {
   [Msg.IMPORT_OPML]: ({ content }) => parseOpml(content),
 
   [Msg.TEST_SOURCE]: async ({ source }) => {
+    assertValidSource(source);
     const result = await fetchPublications(createSource(source), 0);
     return Result.isSuccess(result)
       ? { ok: true, count: result.data.length }
@@ -173,6 +184,7 @@ const handlers = {
   },
 
   [Msg.ADD_PAGE_AS_SOURCE]: async ({ profileId, url, name, type }) => {
+    assertValidSource({ url, name, type: type ?? SourceType.WEB });
     const profile = await profiles.getProfile(profileId);
     if (!profile) throw new Error('Profiel niet gevonden');
     if (profile.sources.some((s) => s.url === url)) {
@@ -233,6 +245,9 @@ const handlers = {
   [Msg.GET_SETTINGS]: () => getSettings(),
 
   [Msg.SAVE_SETTINGS]: async ({ patch }) => {
+    // Geen key of token over http naar een niet-lokale host (S-02).
+    const [problem] = connectionErrors({ ...(await getSettings()), ...patch });
+    if (problem) throw new Error(problem);
     const next = await saveSettings(patch);
     await applySchedule();
     return next;
@@ -261,4 +276,4 @@ const handlers = {
   [Msg.VAULT_DISABLE]: () => disableVault(),
 };
 
-chrome.runtime.onMessage.addListener(createMessageListener(handlers));
+chrome.runtime.onMessage.addListener(createMessageListener(handlers, chrome.runtime.id));

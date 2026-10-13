@@ -83,7 +83,7 @@ export async function renderSettings() {
   const prefilterApiKey = input('password', draft.prefilterApiKey, (v) => {
     draft.prefilterApiKey = v;
   });
-  prefilterApiKey.placeholder = 'leeg: dezelfde key als het taalmodel';
+  prefilterApiKey.placeholder = 'leeg: de key van het taalmodel (zelfde host)';
   const prefilterModel = input('text', draft.prefilterModel, (v) => {
     draft.prefilterModel = v;
   });
@@ -103,7 +103,7 @@ export async function renderSettings() {
     ),
     vault.exists
       ? field('API-key voor de voorfilter', el('div', { class: 'muted', text: 'Staat versleuteld in de vault. Hef de vault op om hem te wijzigen.' }))
-      : field('API-key voor de voorfilter (optioneel)', prefilterApiKey, 'Leeg: de key van het taalmodel hierboven. Een eigen key is handig voor een aparte uitgavenlimiet, of nodig in de proxy-route.'),
+      : field('API-key voor de voorfilter (optioneel)', prefilterApiKey, 'Leeg: de key van het taalmodel hierboven, maar alleen als het endpoint op dezelfde host staat als de Base-URL (standaard openrouter.ai). Een ander endpoint krijgt die key niet. Een eigen key is handig voor een aparte uitgavenlimiet, en nodig in de proxy-route of bij een ander endpoint.'),
     field(
       'Model',
       prefilterModel,

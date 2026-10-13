@@ -46,7 +46,15 @@ const ROUTES = [
   { pattern: /^bron-toevoegen$/, render: () => renderAddSource(), tab: 'profielen' },
 ];
 
+/**
+ * Telt navigaties: een weergave die klaar is terwijl er intussen verder is
+ * genavigeerd, zet niets meer neer (CR-07). Anders kon een tragere, oudere
+ * weergave een nieuwere overschrijven.
+ */
+let navigation = 0;
+
 async function route() {
+  const current = ++navigation;
   const hash = location.hash.replace(/^#/, '') || 'profielen';
 
   for (const { pattern, render, tab } of ROUTES) {
@@ -59,11 +67,12 @@ async function route() {
 
     try {
       const node = await render(...match.slice(1));
+      if (current !== navigation) return;
       clear(view);
       view.append(node);
       window.scrollTo(0, 0);
     } catch (err) {
-      showError(view, err);
+      if (current === navigation) showError(view, err);
     }
     return;
   }

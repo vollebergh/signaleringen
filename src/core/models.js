@@ -119,8 +119,11 @@ export function validateSourceUrl(url) {
 
 /**
  * Wijst de Base-URL naar een lokaal model (B-67)? Localhost, een privé-adres,
- * een adres in 100.x.x.x (o.a. Tailscale) of een `.local`-naam. Zo'n server vraagt geen API-key en kent de
- * OpenRouter-velden (provider-routing, uitwijkroute, redeneren) niet.
+ * een adres in 100.64.0.0/10 (CGNAT, o.a. Tailscale), een `.local`-naam, of
+ * IPv6 loopback, ULA (`fc00::/7`) of link-local (`fe80::/10`). Zo'n server
+ * vraagt geen API-key en kent de OpenRouter-velden (provider-routing,
+ * uitwijkroute, redeneren) niet. Eerder telde heel 100.0.0.0/8 mee, ook
+ * publieke adressen (CR-10).
  */
 export function isLocalBaseUrl(url) {
   let host;
@@ -131,10 +134,31 @@ export function isLocalBaseUrl(url) {
   }
   if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')) return true;
   if (host === '::1') return true;
+  if (host.includes(':')) return /^f[cd][0-9a-f]{0,2}:/i.test(host) || /^fe[89ab][0-9a-f]?:/i.test(host);
   const octets = host.split('.').map(Number);
   if (octets.length !== 4 || octets.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return false;
   const [a, b] = octets;
-  return a === 127 || a === 10 || a === 100 || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31);
+  return (
+    a === 127 ||
+    a === 10 ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 192 && b === 168) ||
+    (a === 172 && b >= 16 && b <= 31)
+  );
+}
+
+/**
+ * Gooit als een bron geen bruikbare http(s)-URL heeft. Voor de worker en de
+ * import (S-05, S-06): de UI controleert ook, maar daar mag de worker niet op
+ * leunen.
+ */
+export function assertValidSource(source) {
+  const url = String(source?.url ?? '').trim();
+  const problem = url ? validateSourceUrl(url) : 'Lege URL';
+  if (problem) throw new Error(`Bron "${source?.name || url || '?'}": ${problem}`);
+  if (source.type !== undefined && !Object.values(SourceType).includes(source.type)) {
+    throw new Error(`Bron "${source.name || url}": onbekend type`);
+  }
 }
 
 /** Dupliceert een profiel met nieuwe id's, inclusief bronnen. */

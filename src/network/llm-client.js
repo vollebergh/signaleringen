@@ -14,7 +14,7 @@
 import { AppConfig } from '../core/config.js';
 import { isLocalBaseUrl } from '../core/models.js';
 import { log } from '../core/logger.js';
-import { fetchWithTimeout, isTransientStatus } from './http.js';
+import { fetchBytes, utf8, isTransientStatus } from './http.js';
 
 /** Praat de extensie rechtstreeks met een lokaal model? (B-67) */
 function isLocal(settings) {
@@ -25,8 +25,35 @@ function usesPreset(model) {
   return typeof model === 'string' && model.includes('@preset/');
 }
 
+/**
+ * Controleert het adres van het taalmodel of de proxy (S-02): https, of http
+ * alleen naar een lokaal adres (B-67). Anders gaat de key of het proxy-token
+ * leesbaar over het netwerk. Een leeg adres is hier geen fout; dat meldt
+ * `isConfigured`. Geëxporteerd voor de tests, het instellingenscherm en de worker.
+ * @returns {string[]} foutmeldingen, leeg als het adres in orde is
+ */
+export function connectionErrors(settings) {
+  const label = settings?.transport === 'proxy' ? 'Proxy-adres' : 'Base-URL';
+  const value = String((settings?.transport === 'proxy' ? settings.proxyUrl : settings?.directBaseUrl) ?? '').trim();
+  if (!value) return [];
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    return [`${label}: geen geldig adres`];
+  }
+  if (url.protocol === 'https:') return [];
+  if (url.protocol === 'http:' && isLocalBaseUrl(value)) return [];
+  return [`${label}: gebruik https. Alleen een lokaal adres (localhost, privénetwerk, Tailscale) mag http; anders gaat de key onversleuteld over het netwerk.`];
+}
+
 /** Bouwt endpoint en headers op basis van de gekozen transportmodus. */
 function resolveEndpoint(settings) {
+  // Ook hier, niet alleen bij het opslaan: oudere instellingen kunnen nog een
+  // http-adres bevatten (S-02).
+  const [problem] = connectionErrors(settings);
+  if (problem) throw new Error(problem);
+
   if (settings.transport === 'proxy') {
     const base = settings.proxyUrl.trim().replace(/\/+$/, '');
     const headers = { 'Content-Type': 'application/json' };
@@ -74,8 +101,30 @@ export function retryDelay(attempt, retryAfterMs = null) {
   return Math.min(retryAfterMs ?? backoff, AppConfig.LLM_RETRY_MAX_DELAY_MS);
 }
 
-const isTransient = (err) =>
-  err instanceof TransientLlmError || err instanceof TypeError || err?.name === 'AbortError';
+/**
+ * Alleen wat als tijdelijk is aangemerkt: 429, 5xx en fouten van het netwerk
+ * zelf (zie `post`). Eerder telde elke `TypeError`, ook een programmeerfout,
+ * en die werd dan zes keer herhaald (CR-09).
+ */
+const isTransient = (err) => err instanceof TransientLlmError;
+
+/**
+ * POST met JSON; geeft het antwoord en de body als tekst. Een time-out of
+ * netwerkfout wordt een `TransientLlmError`; al het andere gooit gewoon door.
+ */
+async function post(url, headers, body, timeoutMs) {
+  let result;
+  try {
+    result = await fetchBytes(url, { method: 'POST', headers, body: JSON.stringify(body) }, { timeoutMs });
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      throw new TransientLlmError(`Geen antwoord binnen ${Math.round(timeoutMs / 1000)} s`);
+    }
+    if (err instanceof TypeError) throw new TransientLlmError(`Netwerkfout: ${err.message}`);
+    throw err;
+  }
+  return { response: result.response, text: utf8(result.bytes) };
+}
 
 /** Kwantisaties die OpenRouter kent; als achtervoegsel in een providertag. */
 export const QUANTIZATIONS = ['int4', 'int8', 'fp4', 'fp6', 'fp8', 'fp16', 'bf16', 'fp32', 'unknown'];
@@ -105,6 +154,7 @@ export function validateRouting(settings) {
       }
     }
   };
+  errors.push(...connectionErrors(settings));
   if (!String(settings.model ?? '').trim()) errors.push('Model: vul een model in');
   check('Provider-routing', settings.providerRouting);
   if (settings.fallbackEnabled) {
@@ -216,13 +266,7 @@ async function completeOnce(settings, route, { system, user, maxTokens, temperat
   // Een OpenRouter-veld; een lokale server krijgt het niet (B-67).
   if (!isLocal(settings)) body.reasoning = { effort: AppConfig.LLM_REASONING_EFFORT };
 
-  const response = await fetchWithTimeout(
-    url,
-    { method: 'POST', headers, body: JSON.stringify(body) },
-    AppConfig.LLM_TIMEOUT_MS,
-  );
-
-  const text = await response.text();
+  const { response, text } = await post(url, headers, body, AppConfig.LLM_TIMEOUT_MS);
   if (!response.ok) {
     log.error(`LLM-fout (${response.status}): ${text.slice(0, 500)}`);
     if (isTransientStatus(response.status)) {
@@ -547,13 +591,25 @@ export function repairJsonArray(json) {
  */
 export function prefilterConnection(settings) {
   const ownKey = settings?.prefilterApiKey?.trim() ?? '';
-  const sharedKey = settings?.transport === 'direct' ? (settings.directApiKey?.trim() ?? '') : '';
+  // De key van het taalmodel gaat alleen mee naar dezelfde host als de
+  // Base-URL (standaard openrouter.ai). Een ander endpoint krijgt hem niet
+  // (S-10): daar is een eigen voorfilter-key voor nodig.
+  const sameHost = hostOf(settings?.prefilterEndpoint) !== null && hostOf(settings?.prefilterEndpoint) === hostOf(settings?.directBaseUrl);
+  const sharedKey = settings?.transport === 'direct' && sameHost ? (settings.directApiKey?.trim() ?? '') : '';
   return {
     url: String(settings?.prefilterEndpoint ?? '').trim(),
     key: ownKey || sharedKey,
     model: String(settings?.prefilterModel ?? '').trim(),
     provider: providerRouting(settings?.prefilterProviderRouting),
   };
+}
+
+function hostOf(url) {
+  try {
+    return new URL(String(url ?? '').trim()).host;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -621,21 +677,17 @@ export function readDecisions(parsed, size) {
   });
 }
 
-async function postDecisions(connection, body) {
-  return fetchWithTimeout(
+function postDecisions(connection, body) {
+  return post(
     connection.url,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${connection.key}` },
-      body: JSON.stringify(body),
-    },
+    { 'Content-Type': 'application/json', Authorization: `Bearer ${connection.key}` },
+    body,
     AppConfig.JEV_TIMEOUT_MS,
   );
 }
 
 async function decideBatch(batch, userQuery, connection) {
-  const response = await postDecisions(connection, buildDecisionsRequest(batch, userQuery, connection));
-  const text = await response.text();
+  const { response, text } = await postDecisions(connection, buildDecisionsRequest(batch, userQuery, connection));
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}: ${apiErrorMessage(text)}`);
   }
@@ -669,7 +721,7 @@ export async function prefilterPublications(publications, userQuery, settings) {
       scores.push(...(await decideBatch(batch, userQuery, connection)));
     }
   } catch (err) {
-    const reason = err?.name === 'AbortError' ? 'timeout' : (err?.message ?? String(err));
+    const reason = err?.message ?? String(err);
     log.warn(`Voorfilter (Jev) niet bruikbaar, alles gaat naar het model: ${reason}`);
     return null;
   }
@@ -815,13 +867,12 @@ export async function testPrefilter(settings) {
   const connection = prefilterConnection(settings);
   if (!connection.url || !connection.model) throw new Error('Vul endpoint en model van de voorfilter in');
   if (!connection.key) throw new Error('Geen key voor de voorfilter: vul er een in, of gebruik de route met een eigen API-key');
-  const response = await postDecisions(connection, {
+  const { response, text } = await postDecisions(connection, {
     model: connection.model,
     ...(connection.provider ? { provider: connection.provider } : {}),
     state: { publicaties: { p0: { titel: 'Kamerbrief over stikstofdepositie in Natura 2000-gebieden' } } },
     questions: { p0: { type: 'noul', instructions: 'Gaat `publicaties.p0` over stikstof?' } },
   });
-  const text = await response.text();
   if (!response.ok) throw new Error(`Voorfilter gaf ${response.status}: ${apiErrorMessage(text)}`);
   let parsed;
   try {

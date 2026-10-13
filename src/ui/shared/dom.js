@@ -189,18 +189,22 @@ export function formatDateTime(millis) {
   return DATETIME_FORMAT.format(new Date(millis));
 }
 
+/** Is dit een http(s)-URL? Alles uit een feed gaat hierlangs voordat het een link wordt. */
+export function isHttpUrl(url) {
+  try {
+    const { protocol } = new URL(url);
+    return protocol === 'http:' || protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Opent een URL in een nieuw tabblad. Alleen http(s) — een `javascript:`-URL
  * uit een feed mag nooit doorgegeven worden aan `tabs.create`.
  */
 export function openUrl(url) {
-  try {
-    const parsed = new URL(url);
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return;
-    chrome.tabs.create({ url: parsed.href });
-  } catch {
-    /* ongeldige URL wordt genegeerd */
-  }
+  if (isHttpUrl(url)) chrome.tabs.create({ url: new URL(url).href });
 }
 
 /**
@@ -221,7 +225,9 @@ export function sourceReferences(sources) {
         el('li', {}, [
           el('span', { class: 'source-ref-nr', text: `[${source.index}]` }),
           el('span', {}, [
-            source.url
+            // `href` alleen bij http(s): middelklik of Ctrl-klik volgt de href
+            // zonder `openUrl` (S-11).
+            isHttpUrl(source.url)
             ? el('a', {
                 href: source.url,
                 text: source.title,

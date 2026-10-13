@@ -18,9 +18,11 @@ const { fetchOpenOverheid } = await import('../src/network/open-overheid.js');
 const { Msg, send, SEND_TIMEOUT_MS } = await import('../src/core/messages.js');
 
 /** Roept de listener aan en wacht op het antwoord. */
-function dispatch(listener, message) {
+const OWN_ID = 'eigen-extensie';
+
+function dispatch(listener, message, sender = { id: OWN_ID }) {
   return new Promise((resolve) => {
-    const keepsOpen = listener(message, {}, resolve);
+    const keepsOpen = listener(message, sender, resolve);
     if (!keepsOpen) resolve(undefined);
   });
 }
@@ -28,21 +30,24 @@ function dispatch(listener, message) {
 // ── CR-01: router ───────────────────────────────────────────────────────────
 
 test('router: een synchrone handler (zoals parseOpml) geeft gewoon antwoord', async () => {
-  const listener = createMessageListener({ sync: ({ n }) => [n, n + 1] });
+  const listener = createMessageListener({ sync: ({ n }) => [n, n + 1] }, OWN_ID);
   assert.deepEqual(await dispatch(listener, { type: 'sync', payload: { n: 1 } }), { ok: true, data: [1, 2] });
 });
 
 test('router: een asynchrone handler geeft zijn waarde terug', async () => {
-  const listener = createMessageListener({ async: async () => 'klaar' });
+  const listener = createMessageListener({ async: async () => 'klaar' }, OWN_ID);
   assert.deepEqual(await dispatch(listener, { type: 'async' }), { ok: true, data: 'klaar' });
 });
 
 test('router: een synchrone fout wordt een foutantwoord, geen gesloten kanaal', async () => {
-  const listener = createMessageListener({
-    boom: () => {
-      throw new Error('kapot');
+  const listener = createMessageListener(
+    {
+      boom: () => {
+        throw new Error('kapot');
+      },
     },
-  });
+    OWN_ID,
+  );
   const response = await dispatch(listener, { type: 'boom' });
   assert.equal(response.ok, false);
   assert.equal(response.error, 'kapot');
@@ -50,20 +55,31 @@ test('router: een synchrone fout wordt een foutantwoord, geen gesloten kanaal', 
 });
 
 test('router: een gestopte scan (B-45) gaat door als cancelled', async () => {
-  const listener = createMessageListener({
-    scan: async () => {
-      const err = new Error('Scan gestopt');
-      err.cancelled = true;
-      throw err;
+  const listener = createMessageListener(
+    {
+      scan: async () => {
+        const err = new Error('Scan gestopt');
+        err.cancelled = true;
+        throw err;
+      },
     },
-  });
+    OWN_ID,
+  );
   const response = await dispatch(listener, { type: 'scan' });
   assert.equal(response.cancelled, true);
 });
 
 test('router: een onbekend bericht laat het kanaal dicht', () => {
-  const listener = createMessageListener({});
-  assert.equal(listener({ type: 'onbekend' }, {}, () => {}), false);
+  const listener = createMessageListener({}, OWN_ID);
+  assert.equal(listener({ type: 'onbekend' }, { id: OWN_ID }, () => {}), false);
+});
+
+test('router: een bericht van een andere afzender wordt genegeerd (S-12)', () => {
+  let called = false;
+  const listener = createMessageListener({ geheim: () => (called = true) }, OWN_ID);
+  assert.equal(listener({ type: 'geheim' }, { id: 'andere-extensie' }, () => {}), false);
+  assert.equal(listener({ type: 'geheim' }, {}, () => {}), false);
+  assert.equal(called, false);
 });
 
 // ── CR-02: ontdubbelen binnen een scan ─────────────────────────────────────

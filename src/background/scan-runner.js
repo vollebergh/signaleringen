@@ -28,6 +28,8 @@ import { markUnread } from '../data/unread-repository.js';
 import {
   loadSeen,
   recordSeen,
+  refreshSeen,
+  pruneSeen,
   markSynthesised,
   recordSourceFetch,
 } from '../data/history-repository.js';
@@ -226,6 +228,9 @@ async function executeScan(profileId, options) {
     const scanDate = Date.now();
     const newItems = fetched.filter((item) => item.isNew);
 
+    // Wat er nog in een bron staat, blijft "eerder gezien" (CR-05).
+    await refreshSeen(fetched.filter((item) => item.seenRecord).map((item) => item.seenRecord), scanDate);
+
     // Wat gaat er naar het model? Standaard alleen wat dit profiel nog niet zag.
     const toEvaluate = profile.onlyNewPublications ? newItems : fetched;
 
@@ -245,6 +250,7 @@ async function executeScan(profileId, options) {
       };
       await saveScan(scan, []);
       await pruneOldScans(profileId);
+    await pruneSeen(profileId);
       setProgress(profileId, {
         phase: 'done',
         scanId,
@@ -358,6 +364,7 @@ async function executeScan(profileId, options) {
           title: item.publication.title,
           sourceName: item.publication.sourceName,
         })),
+      seen,
     );
 
     const results = judged.map(({ verdict, item }) => {
@@ -455,6 +462,7 @@ async function executeScan(profileId, options) {
     }
 
     await pruneOldScans(profileId);
+    await pruneSeen(profileId);
 
     log.info(
       `Scan '${profile.name}': ${fetched.length} opgehaald, ${newItems.length} nieuw, ${relevant.length} relevant`,

@@ -3,9 +3,17 @@
  * Geen magic numbers elders in de codebase.
  */
 export const AppConfig = {
-  // Netwerk-timeouts (milliseconden)
-  FEED_TIMEOUT_MS: 15_000,
+  // Netwerk-timeouts (milliseconden). Gelden voor het hele verzoek, inclusief
+  // het lezen van de body (CR-04); daarom ruimer dan eerder (15 s tot de headers).
+  FEED_TIMEOUT_MS: 30_000,
   LLM_TIMEOUT_MS: 120_000,
+
+  /**
+   * Maximale grootte van een antwoord (CR-04, S-03). Ruim boven wat feeds,
+   * pagina's en API's normaal leveren, maar een fout of kwade server kan het geheugen van de worker niet vullen.
+   * PDF-bijlagen hebben hun eigen grens (`FULLTEXT_PDF_MAX_MB`).
+   */
+  RESPONSE_MAX_BYTES: 10 * 1024 * 1024,
 
   // Contentlimieten
   WEB_CONTENT_MAX_CHARS: 5_000,
@@ -136,6 +144,12 @@ export const AppConfig = {
    * de hele batchverwerking laten opsouperen.
    */
   OPEN_OVERHEID_MAX_RESULTS: 200,
+  /**
+   * Hetzelfde plafond voor een RSS/Atom-bron (S-04): de nieuwste 200. Een feed
+   * die door een fout of met opzet duizenden items levert, laat anders elke
+   * (automatische) scan alles beoordelen, op kosten van de gebruiker.
+   */
+  RSS_MAX_ITEMS_PER_SOURCE: 200,
 
   /**
    * Volledige tekst voor open.overheid-publicaties zonder fragment (B-60).
@@ -171,6 +185,15 @@ export const AppConfig = {
 
   // Bewaartermijn
   SCANS_TO_KEEP_PER_PROFILE: 5,
+  /**
+   * Hoe lang "eerder gezien" bewaard blijft nadat een publicatie voor het
+   * laatst in een bron stond (CR-05, besluit 2026-10-13). Zolang ze nog in een
+   * bron staat, wordt `lastSeenAt` bijgewerkt en blijft het record staan; pas
+   * 180 dagen nadat ze uit alle bronnen verdween, gaat het weg. Het bijwerken
+   * gebeurt hooguit één keer per dag per record, om schrijfwerk te sparen.
+   */
+  SEEN_RETENTION_DAYS: 180,
+  SEEN_REFRESH_MS: 24 * 60 * 60 * 1000,
 
   /**
    * Kosten per scan (B-45). Geen harde grens: de gebruiker gaat over zijn

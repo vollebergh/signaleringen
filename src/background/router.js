@@ -11,10 +11,14 @@ import { log } from '../core/logger.js';
 /**
  * @param {Record<string, (payload: any) => any>} handlers per berichttype; een
  *   handler mag een promise of een gewone waarde teruggeven, en mag gooien
+ * @param {string} extensionId alleen berichten van deze extensie worden
+ *   behandeld (S-12). Zonder content scripts en `externally_connectable` kan
+ *   er nu niets anders binnenkomen; dit houdt dat zo als dat ooit verandert.
  * @returns {(message: any, sender: any, sendResponse: (response: any) => void) => boolean}
  */
-export function createMessageListener(handlers) {
-  return (message, _sender, sendResponse) => {
+export function createMessageListener(handlers, extensionId) {
+  return (message, sender, sendResponse) => {
+    if (sender?.id !== extensionId) return false;
     const handler = handlers[message?.type];
     if (!handler) return false;
 

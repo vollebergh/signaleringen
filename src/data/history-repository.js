@@ -12,6 +12,7 @@
  *                   opgehaald, met welk resultaat, hoeveel daarvan nieuw was.
  */
 
+import { AppConfig } from '../core/config.js';
 import { Store, getAllByIndex, getByKey, transaction } from './db.js';
 import { log } from '../core/logger.js';
 
@@ -55,11 +56,13 @@ export async function loadSeen(profileId) {
 /**
  * Legt vast dat deze publicaties in deze scan zijn gezien. Records die al
  * bestaan blijven staan — het eerste-keer-gezien-moment mag niet verschuiven.
+ * @param {Map<string, object>} [existing] de al geladen `seen` van dit profiel;
+ *   scheelt een tweede keer alles laden (CR-05)
  */
-export async function recordSeen(profileId, scanId, entries) {
+export async function recordSeen(profileId, scanId, entries, existing = null) {
   if (entries.length === 0) return;
   const now = Date.now();
-  const existing = await loadSeen(profileId);
+  existing ??= await loadSeen(profileId);
 
   const records = entries
     .filter((entry) => !existing.has(entry.key))
@@ -71,6 +74,7 @@ export async function recordSeen(profileId, scanId, entries) {
       title: entry.title ?? '',
       sourceName: entry.sourceName ?? '',
       firstSeenAt: now,
+      lastSeenAt: now,
       firstScanId: scanId,
       synthesisScanId: null,
       synthesisAt: null,
@@ -81,6 +85,42 @@ export async function recordSeen(profileId, scanId, entries) {
     records.forEach((record) => store.put(record));
   });
   log.debug(`${records.length} nieuwe publicatie(s) vastgelegd voor profiel ${profileId}`);
+}
+
+/**
+ * Werkt `lastSeenAt` bij van eerder geziene publicaties die nu weer in een bron
+ * stonden, hooguit één keer per `SEEN_REFRESH_MS` per record (CR-05).
+ * @param {object[]} records seen-records uit `loadSeen`
+ * @returns {Promise<number>} aantal bijgewerkte records
+ */
+export async function refreshSeen(records, now = Date.now()) {
+  const stale = records.filter((record) => (record.lastSeenAt ?? record.firstSeenAt ?? 0) < now - AppConfig.SEEN_REFRESH_MS);
+  if (stale.length === 0) return 0;
+  await transaction(Store.SEEN, 'readwrite', (store) => {
+    stale.forEach((record) => store.put({ ...record, lastSeenAt: now }));
+  });
+  return stale.length;
+}
+
+/**
+ * Welke seen-records weg mogen: langer dan de bewaartermijn niet meer in een
+ * bron gezien. Records van vóór `lastSeenAt` vallen terug op `firstSeenAt`.
+ * Geëxporteerd voor de tests.
+ */
+export function expiredSeen(records, now = Date.now(), retentionDays = AppConfig.SEEN_RETENTION_DAYS) {
+  const cutoff = now - retentionDays * 24 * 60 * 60 * 1000;
+  return records.filter((record) => (record.lastSeenAt ?? record.firstSeenAt ?? 0) < cutoff);
+}
+
+/** Ruimt verlopen seen-records van een profiel op (CR-05). */
+export async function pruneSeen(profileId, now = Date.now()) {
+  const expired = expiredSeen(await getAllByIndex(Store.SEEN, 'profileId', profileId), now);
+  if (expired.length === 0) return 0;
+  await transaction(Store.SEEN, 'readwrite', (store) => {
+    expired.forEach((record) => store.delete(record.id));
+  });
+  log.debug(`${expired.length} verlopen seen-record(s) opgeruimd voor profiel ${profileId}`);
+  return expired.length;
 }
 
 /**

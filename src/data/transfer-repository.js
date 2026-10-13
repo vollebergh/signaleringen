@@ -16,7 +16,7 @@
  */
 
 import { AppConfig } from '../core/config.js';
-import { createProfile } from '../core/models.js';
+import { assertValidSource, createProfile } from '../core/models.js';
 import { log } from '../core/logger.js';
 import { Store, getAllByIndex, getByKey, transaction } from './db.js';
 import { loadProfiles, getProfile } from './profile-repository.js';
@@ -152,6 +152,16 @@ export function assertValidBundle(bundle) {
   if (!Array.isArray(bundle.profiles)) {
     throw new Error('Het exportbestand bevat geen profielen.');
   }
+  // Inhoud van buiten (S-06): elk profiel met een id en geldige bronnen.
+  for (const entry of bundle.profiles) {
+    if (!entry?.profile || typeof entry.profile.id !== 'string' || !entry.profile.id) {
+      throw new Error('Het exportbestand bevat een profiel zonder id.');
+    }
+    if (!Array.isArray(entry.scans ?? [])) {
+      throw new Error(`Profiel "${entry.profile.name ?? ''}": de scans zijn geen lijst.`);
+    }
+    (entry.profile.sources ?? []).forEach(assertValidSource);
+  }
 }
 
 /**
@@ -196,19 +206,24 @@ export async function importProfiles(bundle, options = {}) {
 }
 
 /**
- * Schrijft één profiel met alles eronder weg.
+ * Bouwt de records van één profiel met alles eronder, klaar om weg te
+ * schrijven. Geëxporteerd voor de tests.
  *
- * Bij `remap` krijgt élke id een nieuwe waarde — profiel, bronnen, scans,
- * publicaties, seen-records en bronstatussen — en worden de verwijzingen
- * daartussen meegetrokken. Zonder dat zou een geïmporteerde kopie de scans van
- * het origineel overschrijven, want die delen dan dezelfde sleutels.
+ * Scans en publicaties krijgen **altijd** nieuwe id's, en de verwijzingen
+ * ernaar worden meegetrokken (S-06). Die sleutels gelden over alle profielen
+ * heen; een id uit een (gemanipuleerd) bestand kon anders een scan van een
+ * ander profiel overschrijven. Bij `remap` (kopie naast het origineel) krijgen
+ * ook profiel en bronnen een nieuwe id; `seen` en `sourceState` hebben
+ * sleutels per profiel en volgen het profiel-id.
+ *
+ * @param {{ remap: boolean, makeId?: () => string }} options
  */
-async function writeEntry(entry, { remap }) {
-  const profileId = remap ? newId() : entry.profile.id;
+export function buildEntryRecords(entry, { remap, makeId = newId }) {
+  const profileId = remap ? makeId() : entry.profile.id;
 
   const sourceIdMap = new Map();
   const sources = (entry.profile.sources ?? []).map((source) => {
-    const id = remap ? newId() : source.id;
+    const id = remap ? makeId() : source.id;
     sourceIdMap.set(source.id, id);
     return { ...source, id };
   });
@@ -222,12 +237,10 @@ async function writeEntry(entry, { remap }) {
 
   // Eerst alle scan-id's: publicaties en seen-records verwijzen naar de scan
   // van een eerdere synthese, en die kan later in de bundel staan.
-  const scanIdMap = new Map(
-    (entry.scans ?? []).map((bundleScan) => [bundleScan.scan.id, remap ? newId() : bundleScan.scan.id]),
-  );
+  const scanIdMap = new Map((entry.scans ?? []).map((bundleScan) => [bundleScan.scan.id, makeId()]));
   // Een verwijzing naar een scan die niet in de bundel zit (al opgeruimd)
-  // wordt bij een kopie leeg: anders wijst de kopie naar het origineel.
-  const mapScanRef = (id) => (id && remap ? (scanIdMap.get(id) ?? null) : (id ?? null));
+  // wordt leeg: anders wijst hij naar een scan buiten dit profiel.
+  const mapScanRef = (id) => (id ? (scanIdMap.get(id) ?? null) : null);
 
   const scans = [];
   const publications = [];
@@ -253,7 +266,7 @@ async function writeEntry(entry, { remap }) {
       publications.push(
         toPublicationRecord({
           ...publication,
-          id: remap ? newId() : publication.id,
+          id: makeId(),
           scanId,
           previousSynthesisScanId: mapScanRef(publication.previousSynthesisScanId),
           // Booleans normaliseren: een oudere export kan hier true/false hebben
@@ -277,15 +290,22 @@ async function writeEntry(entry, { remap }) {
     ...record,
     id: `${profileId}::${record.key}`,
     profileId,
+    firstScanId: mapScanRef(record.firstScanId),
     synthesisScanId: mapScanRef(record.synthesisScanId),
     synthesisAt: record.synthesisAt ?? null,
   }));
 
   const sourceStates = (entry.sourceStates ?? []).map((record) => {
     const sourceId = sourceIdMap.get(record.sourceId) ?? record.sourceId;
-    return { ...record, id: `${profileId}::${sourceId}`, profileId, sourceId };
+    return { ...record, id: `${profileId}::${sourceId}`, profileId, sourceId, lastScanId: mapScanRef(record.lastScanId) };
   });
 
+  return { profile, scans, publications, syntheses, seen, sourceStates };
+}
+
+/** Schrijft één profiel met alles eronder weg, in één transactie. */
+async function writeEntry(entry, { remap }) {
+  const { profile, scans, publications, syntheses, seen, sourceStates } = buildEntryRecords(entry, { remap });
   await transaction(
     [Store.PROFILES, Store.SCANS, Store.PUBLICATIONS, Store.SYNTHESES, Store.SEEN, Store.SOURCE_STATE],
     'readwrite',

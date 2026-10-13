@@ -24,7 +24,7 @@ import { AppConfig } from '../core/config.js';
 import { createPublication } from '../core/models.js';
 import { Result } from '../core/result.js';
 import { log } from '../core/logger.js';
-import { fetchWithTimeout, isTransientStatus, classifyFetchError } from './http.js';
+import { fetchBytes, utf8, isTransientStatus, classifyFetchError } from './http.js';
 import { stripHtml } from './feed-fetcher.js';
 
 const SITE_HOST = 'open.overheid.nl';
@@ -284,19 +284,6 @@ export function snippetAround(text, terms, side = AppConfig.FULLTEXT_SNIPPET_CHA
   return parts.join(' ');
 }
 
-/** Leest de body, maar geeft op na `timeoutMs`: `fetch` heeft alleen een deadline op de headers. */
-async function readBytes(response, timeoutMs) {
-  let timer;
-  const deadline = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error('time-out bij het lezen van de bijlage')), timeoutMs);
-  });
-  try {
-    return new Uint8Array(await Promise.race([response.arrayBuffer(), deadline]));
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 /**
  * Haalt voor publicaties met een `fullTextUrl` de tekst op en zet een fragment
  * rond de zoekterm achter de beschrijving. Een pagina die niet lukt of geen
@@ -336,28 +323,23 @@ export async function enrichWithFullText(publications, onProgress, { extractPdfT
   // (`cache-control: no-store`), maar daar leunen we niet op. De tekst zelf
   // wordt nergens bewaard; alleen het fragment.
   const fetchPage = async (pub) => {
-    const response = await fetchWithTimeout(
+    const { response, bytes } = await fetchBytes(
       pub.fullTextUrl,
       { headers: { Accept: 'text/html' }, cache: 'no-store' },
-      AppConfig.FEED_TIMEOUT_MS,
+      { timeoutMs: AppConfig.FEED_TIMEOUT_MS },
     );
-    return response.ok && addSnippet(pub, extractBodyText(await response.text()));
+    return response.ok && addSnippet(pub, extractBodyText(utf8(bytes)));
   };
 
   const fetchPdf = async (pub) => {
-    const response = await fetchWithTimeout(
+    // De zoek-API gaf een grootte vooraf; de server weet het zelf beter, en
+    // `fetchBytes` breekt af boven de grens.
+    const { response, bytes } = await fetchBytes(
       pub.fullTextUrl,
       { headers: { Accept: 'application/pdf' }, cache: 'no-store' },
-      AppConfig.FULLTEXT_PDF_TIMEOUT_MS,
+      { timeoutMs: AppConfig.FULLTEXT_PDF_TIMEOUT_MS, maxBytes: AppConfig.FULLTEXT_PDF_MAX_MB * 1024 * 1024 },
     );
     if (!response.ok) return false;
-    // De zoek-API gaf een grootte vooraf; de server weet het zelf beter.
-    const length = Number(response.headers.get('content-length'));
-    if (length > AppConfig.FULLTEXT_PDF_MAX_MB * 1024 * 1024) {
-      await response.body?.cancel();
-      return false;
-    }
-    const bytes = await readBytes(response, AppConfig.FULLTEXT_PDF_TIMEOUT_MS);
     return addSnippet(pub, await extractPdfText(bytes, pub.fullTextTerms ?? []));
   };
 
@@ -407,17 +389,17 @@ export async function fetchOpenOverheid(source, since) {
 
   try {
     for (let start = 0; start < max; start += PAGE_SIZE) {
-      const response = await fetchWithTimeout(
+      const { response, bytes } = await fetchBytes(
         toApiUrl(source.url, { ...range, start }),
         { headers: { Accept: 'application/json' } },
-        AppConfig.FEED_TIMEOUT_MS,
+        { timeoutMs: AppConfig.FEED_TIMEOUT_MS },
       );
       if (!response.ok) {
         const message = `HTTP ${response.status} voor ${label}`;
         return isTransientStatus(response.status) ? Result.networkError(message) : Result.error(message);
       }
 
-      const json = await response.json();
+      const json = JSON.parse(utf8(bytes));
       const page = mapResults(json, source.name, terms);
       publications.push(...page);
 

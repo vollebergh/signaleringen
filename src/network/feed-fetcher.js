@@ -10,7 +10,7 @@ import { Result } from '../core/result.js';
 import { SourceType, createPublication } from '../core/models.js';
 import { log } from '../core/logger.js';
 import { parseXml, decodeEntities } from './xml-parser.js';
-import { fetchWithTimeout, withRetry, isTransientStatus, classifyFetchError } from './http.js';
+import { fetchBytes, withRetry, isTransientStatus, classifyFetchError } from './http.js';
 // Wederzijdse import: open-overheid.js gebruikt stripHtml hieronder. Veilig,
 // omdat beide kanten de ander pas bij een aanroep nodig hebben.
 import { fetchOpenOverheid } from './open-overheid.js';
@@ -27,10 +27,10 @@ export function fetchPublications(source, since) {
 }
 
 async function fetchBody(source) {
-  const response = await fetchWithTimeout(
+  const { response, bytes } = await fetchBytes(
     source.url,
     { headers: { Accept: 'application/rss+xml, application/xml, text/xml, text/html;q=0.8' } },
-    AppConfig.FEED_TIMEOUT_MS,
+    { timeoutMs: AppConfig.FEED_TIMEOUT_MS },
   );
 
   if (!response.ok) {
@@ -40,7 +40,7 @@ async function fetchBody(source) {
       : { error: Result.error(message) };
   }
 
-  const text = decodeBody(new Uint8Array(await response.arrayBuffer()), response.headers.get('content-type'));
+  const text = decodeBody(bytes, response.headers.get('content-type'));
   if (!text) {
     return { error: Result.error(`Lege response voor ${source.name || source.url}`) };
   }
@@ -103,7 +103,7 @@ async function fetchRss(source, since) {
           : `${source.name || source.url} is een webpagina, geen RSS- of Atom-feed. Gebruik het feedadres, of kies het type Webpagina.`,
       );
     }
-    return Result.success(parseFeed(text, source.name, since, finalUrl));
+    return Result.success(newestFirst(parseFeed(text, source.name, since, finalUrl), source));
   } catch (err) {
     return withRedirectHint(classifyFetchError(err, source.name || source.url), err);
   }
@@ -120,6 +120,13 @@ export const REDIRECT_HINT =
 function withRedirectHint(result, err) {
   if (!(err instanceof TypeError)) return result;
   return { ...result, message: `${result.message}. ${REDIRECT_HINT}` };
+}
+
+/** De nieuwste items, tot het plafond per bron (S-04). Geëxporteerd voor de tests. */
+export function newestFirst(publications, source = {}, max = AppConfig.RSS_MAX_ITEMS_PER_SOURCE) {
+  if (publications.length <= max) return publications;
+  log.warn(`'${source.name || source.url}': ${publications.length} items, alleen de nieuwste ${max} gebruikt`);
+  return [...publications].sort((a, b) => b.publishedDate - a.publishedDate).slice(0, max);
 }
 
 async function fetchWeb(source) {
