@@ -11,7 +11,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 const { fetchBytes, ResponseTooLargeError, classifyFetchError } = await import('../src/network/http.js');
-const { prefilterConnection, testConnection } = await import('../src/network/llm-client.js');
+const { testConnection } = await import('../src/network/llm-transport.js');
+const { prefilterConnection } = await import('../src/network/prefilter.js');
 const { connectionErrors, validateRouting } = await import('../src/core/routing.js');
 const { isLocalBaseUrl, assertValidSource } = await import('../src/core/models.js');
 const { assertValidBundle, buildEntryRecords } = await import('../src/data/transfer-repository.js');

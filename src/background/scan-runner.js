@@ -13,13 +13,9 @@ import { AppConfig } from '../core/config.js';
 import { Result } from '../core/result.js';
 import { log } from '../core/logger.js';
 import { fetchPublications } from '../network/feed-fetcher.js';
-import {
-  filterPublications,
-  isPrefilterActive,
-  prefilterPublications,
-  selectForSynthesis,
-  synthesizeProfile,
-} from '../network/llm-client.js';
+import { filterPublications } from '../network/relevance-filter.js';
+import { isPrefilterActive, prefilterPublications } from '../network/prefilter.js';
+import { selectForSynthesis, synthesizeProfile } from '../network/synthesis.js';
 import { getSettings, isConfigured, missingConfigMessage } from '../data/settings-repository.js';
 import { withApiKey } from '../data/vault-repository.js';
 import { getProfile } from '../data/profile-repository.js';

@@ -30,7 +30,8 @@ import { markRead } from '../data/unread-repository.js';
 import { exportProfiles, exportFilename, previewImport, importProfiles } from '../data/transfer-repository.js';
 
 import { fetchPublications } from '../network/feed-fetcher.js';
-import { testConnection, testPrefilter } from '../network/llm-client.js';
+import { testConnection } from '../network/llm-transport.js';
+import { testPrefilter } from '../network/prefilter.js';
 import { connectionErrors } from '../core/routing.js';
 
 import { runScan, getProgress, isScanning, confirmScan } from './scan-runner.js';
