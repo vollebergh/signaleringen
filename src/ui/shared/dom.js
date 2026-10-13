@@ -153,6 +153,11 @@ export function markSynthesisRead(profileId, createdAt) {
   );
 }
 
+/** URL van het dashboard met een route, bijv. `#profiel/<id>/signaleringen`. */
+export function dashboardUrl(hash = '') {
+  return chrome.runtime.getURL(`src/ui/dashboard/dashboard.html${hash}`);
+}
+
 export function clear(node) {
   while (node.firstChild) node.removeChild(node.firstChild);
 }

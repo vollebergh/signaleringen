@@ -89,7 +89,7 @@ function judge(user) {
 globalThis.fetch = async (input, init = {}) => {
   const url = String(input);
   if (url.startsWith('chrome-extension://')) return new Response('', { status: 404 });
-  if (url.startsWith('https://openrouter.ai/')) {
+  if (url.startsWith('https://openrouter.ai/') || url.startsWith('http://localhost:11434/')) {
     const body = JSON.parse(init.body);
     const user = body.messages[1].content;
     const isFilter = user.startsWith('Beoordeel de volgende publicaties');
@@ -109,7 +109,7 @@ globalThis.fetch = async (input, init = {}) => {
 
 // ── Modules pas na de nabootsing laden ─────────────────────────────────────
 
-const { AppConfig } = await import('../src/core/config.js');
+const { AppConfig, DefaultSettings } = await import('../src/core/config.js');
 const { createProfile } = await import('../src/core/models.js');
 const { saveSettings } = await import('../src/data/settings-repository.js');
 const { saveProfile } = await import('../src/data/profile-repository.js');
@@ -367,4 +367,31 @@ test('vault: aanzetten, vergrendelen, ontgrendelen en opheffen', async () => {
   assert.equal((await getSettings()).directApiKey, 'sk-vault');
   assert.equal((await getVaultStatus()).exists, false);
   await saveSettings({ directApiKey: 'sk-test' });
+});
+
+// ── Planner en vault (CR-18) ───────────────────────────────────────────────
+
+test('planner: een vergrendelde vault houdt een lokaal model niet tegen, OpenRouter wel', async () => {
+  const { enableVault, lock, unlock, disableVault } = await import('../src/data/vault-repository.js');
+  const { runDueScans } = await import('../src/background/scheduler.js');
+  const a = feed([item('j1', 'j1 relevant')]);
+  const profile = await profileWith([a], { autoScanEnabled: true, autoScanIntervalMinutes: 60 });
+
+  await saveSettings({ directApiKey: 'sk-vault' });
+  await enableVault('lange wachtwoordzin');
+  await lock();
+  try {
+    await saveSettings({ autoScanEnabled: true });
+    assert.deepEqual(await runDueScans(), { ran: 0, skipped: 'locked' });
+
+    await saveSettings({ directBaseUrl: 'http://localhost:11434/v1', model: 'qwen2.5:3b' });
+    const outcome = await runDueScans();
+    assert.equal(outcome.ran, 1);
+    assert.equal((await getScansForProfile(profile.id)).length, 1);
+  } finally {
+    await saveSettings({ autoScanEnabled: false, directBaseUrl: DefaultSettings.directBaseUrl, model: DefaultSettings.model });
+    await unlock('lange wachtwoordzin');
+    await disableVault();
+    await saveSettings({ directApiKey: 'sk-test' });
+  }
 });

@@ -22,7 +22,7 @@ import { getSettings } from '../data/settings-repository.js';
 import { loadProfiles } from '../data/profile-repository.js';
 import { getLatestScan } from '../data/scan-repository.js';
 import { isConfigured } from '../data/settings-repository.js';
-import { getVaultStatus } from '../data/vault-repository.js';
+import { withApiKey, VaultLockedError } from '../data/vault-repository.js';
 import { runScan, isScanning } from './scan-runner.js';
 import { missingOrigins } from './permissions.js';
 import { updateBadge } from './badge.js';
@@ -95,8 +95,13 @@ export async function runDueScans() {
     return { ran: 0, skipped: 'not-configured' };
   }
 
-  const vault = await getVaultStatus();
-  if (vault.exists && !vault.unlocked && settings.transport === 'direct') {
+  // Dezelfde regel als de scan zelf (CR-18): alleen een vergrendelde vault
+  // waarvan de key nodig is, houdt de planner tegen. Een lokaal model heeft
+  // geen key nodig (B-67).
+  try {
+    await withApiKey(settings);
+  } catch (err) {
+    if (!(err instanceof VaultLockedError)) throw err;
     log.warn('Automatische synthese overgeslagen: de vault is vergrendeld (bijv. na een herstart van de browser)');
     return { ran: 0, skipped: 'locked' };
   }

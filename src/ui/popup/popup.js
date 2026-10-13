@@ -5,9 +5,9 @@
  */
 
 import { Msg, send } from '../../core/messages.js';
-import { isLocalBaseUrl } from '../../core/models.js';
 import { log } from '../../core/logger.js';
-import { $, el, clear, applyTheme, formatDateTime, showError, progressLabel, showProgress, explainScanFailure } from '../shared/dom.js';
+import { $, el, clear, applyTheme, formatDateTime, showError, progressLabel, showProgress, dashboardUrl } from '../shared/dom.js';
+import { runScanInStatus, showInterrupted } from '../shared/scan-control.js';
 
 const content = $('#content');
 
@@ -55,20 +55,18 @@ async function init() {
 
 async function render() {
   try {
-    const [profiles, settings, vault, unread] = await Promise.all([
+    // Of er genoeg is ingesteld, beslist de worker (CR-18): dezelfde regel
+    // als vóór een scan.
+    const [profiles, settings, vault, unread, configured] = await Promise.all([
       send(Msg.LIST_PROFILES),
       send(Msg.GET_SETTINGS),
       send(Msg.VAULT_STATUS),
       send(Msg.LIST_UNREAD),
+      send(Msg.IS_CONFIGURED),
     ]);
 
     clear(content);
     statusNodes.clear();
-
-    const configured =
-      settings.transport === 'proxy'
-        ? Boolean(settings.proxyUrl?.trim())
-        : Boolean(settings.directApiKey?.trim()) || vault.exists || isLocalBaseUrl(settings.directBaseUrl);
 
     if (!configured) {
       content.append(
@@ -201,7 +199,7 @@ async function profileCard(profile, isUnread) {
       // Wacht de scan op "doorgaan?" (B-45), dan de vraag opnieuw tonen.
       if (scanState.phase === 'confirm') showProgress(status, { ...scanState, profileId: profile.id });
     } else if (scanState.phase === 'interrupted') {
-      showInterrupted(profile.id, status, scanState.message, scanButton);
+      showInterrupted(status, scanState.message, () => startScan(profile.id, scanButton));
     }
   } catch (err) {
     status.textContent = err.message;
@@ -211,65 +209,26 @@ async function profileCard(profile, isUnread) {
   return card;
 }
 
-/** Afgebroken scan: melding plus een knop om opnieuw te scannen. */
-function showInterrupted(profileId, status, message, scanButton) {
-  clear(status);
-  status.classList.add('error');
-  status.append(
-    el('span', { text: `${message} ` }),
-    el('button', { class: 'icon', text: 'Opnieuw scannen', onclick: () => startScan(profileId, scanButton) }),
-  );
-}
-
 function openDashboard(hash) {
-  chrome.tabs.create({ url: chrome.runtime.getURL(`src/ui/dashboard/dashboard.html${hash}`) });
+  chrome.tabs.create({ url: dashboardUrl(hash) });
   window.close();
 }
 
 const openSyntheses = (profileId) => openDashboard(`#profiel/${profileId}/signaleringen`);
-const openScan = (profileId, scanId) =>
-  openDashboard(`#profiel/${profileId}/scan/${scanId}`);
 
 /**
- * Start een scan, of haakt aan bij de lopende: de worker geeft dan diezelfde
- * run terug.
+ * Start een scan, of haakt aan bij de lopende. De voortgang komt binnen via
+ * de luisteraar onderaan, die ook scans toont die elders zijn gestart.
  */
-async function startScan(profileId, button, initialLabel = 'Scan gestart…') {
-  const status = statusNodes.get(profileId);
-  button.disabled = true;
-  if (status) {
-    clear(status);
-    status.classList.remove('error');
-    status.append(el('span', { class: 'spinner' }), el('span', { text: ` ${initialLabel}` }));
-  }
-
-  try {
-    const { scanId, relevantCount } = await send(Msg.START_SCAN, { profileId });
-    if (status) {
-      clear(status);
-      status.append(
-        el('span', { text: `${relevantCount} relevant · ` }),
-        el('button', {
-          class: 'icon',
-          text: 'bekijken',
-          onclick: () => openScan(profileId, scanId),
-        }),
-      );
-    }
-  } catch (err) {
-    if (status) {
-      const message = await explainScanFailure(profileId, err);
-      if (err.workerStopped) {
-        showInterrupted(profileId, status, message, button);
-      } else {
-        clear(status);
-        status.classList.toggle('error', !err.cancelled);
-        status.textContent = message;
-      }
-    }
-  } finally {
-    button.disabled = false;
-  }
+function startScan(profileId, button, initialLabel) {
+  return runScanInStatus({
+    profileId,
+    button,
+    status: statusNodes.get(profileId),
+    initialLabel,
+    resultText: 'bekijken',
+    openResult: (scanId) => openDashboard(`#profiel/${profileId}/scan/${scanId}`),
+  });
 }
 
 // Voortgangsberichten uit de service worker.

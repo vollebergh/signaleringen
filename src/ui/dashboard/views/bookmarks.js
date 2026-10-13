@@ -3,7 +3,8 @@
  */
 
 import { Msg, send } from '../../../core/messages.js';
-import { el, formatDate, openUrl } from '../../shared/dom.js';
+import { el } from '../../shared/dom.js';
+import { publicationRow } from '../../shared/publication-row.js';
 
 export async function renderBookmarks() {
   const bookmarks = await send(Msg.LIST_BOOKMARKS);
@@ -22,34 +23,22 @@ export async function renderBookmarks() {
   root.append(el('h2', { text: `Bladwijzers (${bookmarks.length})` }));
 
   for (const result of bookmarks) {
-    const pub = result.publication;
-    const row = el('div', { class: 'publication' });
-
-    row.append(
-      el('div', { class: 'title', text: pub.title || '(zonder titel)' }),
-      el('div', { class: 'muted', text: result.shortDescription }),
-      el('div', { class: 'links' }, [
-        el('span', { class: 'muted', text: `${pub.sourceName} · ${formatDate(pub.publishedDate)}` }),
-        pub.url
-          ? el('button', { class: 'icon', text: 'Openen', onclick: () => openUrl(pub.url) })
-          : null,
-        el('button', {
-          class: 'icon',
-          text: 'Verwijderen',
-          onclick: async (event) => {
-            const button = event.currentTarget; // na een await is currentTarget leeg
-            try {
-              await send(Msg.TOGGLE_BOOKMARK, { publicationId: result.id, bookmarked: false });
-              row.remove();
-            } catch {
-              button.textContent = 'Verwijderen mislukt';
-            }
-          },
-        }),
-      ]),
-    );
-
-    root.append(row);
+    const actions = (row) => [
+      el('button', {
+        class: 'icon',
+        text: 'Verwijderen',
+        onclick: async (event) => {
+          const button = event.currentTarget; // na een await is currentTarget leeg
+          try {
+            await send(Msg.TOGGLE_BOOKMARK, { publicationId: result.id, bookmarked: false });
+            row.remove();
+          } catch {
+            button.textContent = 'Verwijderen mislukt';
+          }
+        },
+      }),
+    ];
+    root.append(publicationRow(result, { actions }));
   }
 
   return root;

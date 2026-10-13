@@ -4,7 +4,8 @@
  */
 
 import { Msg, send } from '../../../core/messages.js';
-import { el, clear, formatDateTime, progressLabel, showProgress, explainScanFailure } from '../../shared/dom.js';
+import { el, clear, formatDateTime, progressLabel, showProgress } from '../../shared/dom.js';
+import { runScanInStatus, showInterrupted } from '../../shared/scan-control.js';
 
 export async function renderProfileList() {
   const profiles = await send(Msg.LIST_PROFILES);
@@ -191,7 +192,7 @@ function profileCard(profile) {
         return;
       }
       if (scanState.phase === 'interrupted') {
-        showInterrupted(profile.id, scanButton, status, scanState.message);
+        showInterrupted(status, scanState.message, () => runScan(profile.id, scanButton, status));
         return;
       }
 
@@ -249,57 +250,17 @@ function showActionError(status, message) {
   status.textContent = message;
 }
 
-/** Afgebroken scan: melding plus een knop om opnieuw te scannen. */
-function showInterrupted(profileId, button, status, message) {
-  clear(status);
-  status.classList.add('error');
-  status.append(
-    el('span', { text: `${message} ` }),
-    el('button', { class: 'icon', text: 'Opnieuw scannen', onclick: () => runScan(profileId, button, status) }),
-  );
-}
-
-/**
- * Start een scan, of haakt aan bij de lopende: de worker geeft dan diezelfde
- * run terug.
- */
-async function runScan(profileId, button, status, initialLabel = 'Scan gestart…') {
-  button.disabled = true;
-  clear(status);
-  status.classList.remove('error');
-  status.append(el('span', { class: 'spinner' }), el('span', { text: ` ${initialLabel}` }));
-
-  const onProgress = (message) => {
-    if (message?.type !== Msg.SCAN_PROGRESS || message.payload.profileId !== profileId) return;
-    showProgress(status, message.payload, { withSource: true });
-  };
-
-  chrome.runtime.onMessage.addListener(onProgress);
-
-  try {
-    const { scanId, relevantCount } = await send(Msg.START_SCAN, { profileId });
-    clear(status);
-    status.append(
-      el('span', { text: `${relevantCount} relevant · ` }),
-      el('button', {
-        class: 'icon',
-        text: 'resultaat bekijken',
-        onclick: () => {
-          location.hash = `#profiel/${profileId}/scan/${scanId}`;
-        },
-      }),
-    );
-  } catch (err) {
-    const message = await explainScanFailure(profileId, err);
-    if (err.workerStopped) {
-      showInterrupted(profileId, button, status, message);
-    } else {
-      clear(status);
-      status.classList.toggle('error', !err.cancelled);
-      status.textContent = message;
-    }
-  } finally {
-    chrome.runtime.onMessage.removeListener(onProgress);
-    button.disabled = false;
-  }
+/** Start een scan, of haakt aan bij de lopende, met de voortgang in de statusregel van de kaart. */
+function runScan(profileId, button, status, initialLabel) {
+  return runScanInStatus({
+    profileId,
+    button,
+    status,
+    initialLabel,
+    resultText: 'resultaat bekijken',
+    openResult: (scanId) => {
+      location.hash = `#profiel/${profileId}/scan/${scanId}`;
+    },
+    progress: { withSource: true },
+  });
 }

@@ -42,6 +42,7 @@ export const Msg = Object.freeze({
 
   // Instellingen
   GET_SETTINGS: 'settings/get',
+  IS_CONFIGURED: 'settings/isConfigured',
   SAVE_SETTINGS: 'settings/save',
   TEST_CONNECTION: 'settings/testConnection',
   TEST_PREFILTER: 'settings/testPrefilter',

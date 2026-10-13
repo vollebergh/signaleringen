@@ -24,7 +24,7 @@ import { Result } from '../core/result.js';
 import * as profiles from '../data/profile-repository.js';
 import * as scans from '../data/scan-repository.js';
 import { getSourceOverview } from '../data/history-repository.js';
-import { getSettings, saveSettings } from '../data/settings-repository.js';
+import { getSettings, saveSettings, isConfigured } from '../data/settings-repository.js';
 import { withApiKey, getVaultStatus, enableVault, unlock, lock, disableVault } from '../data/vault-repository.js';
 import { markRead } from '../data/unread-repository.js';
 import { exportProfiles, exportFilename, previewImport, importProfiles } from '../data/transfer-repository.js';
@@ -241,6 +241,7 @@ const handlers = {
   },
 
   [Msg.GET_SETTINGS]: () => getSettings(),
+  [Msg.IS_CONFIGURED]: () => isConfigured(),
 
   [Msg.SAVE_SETTINGS]: async ({ patch }) => {
     // Geen key of token over http naar een niet-lokale host (S-02).

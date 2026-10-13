@@ -5,7 +5,8 @@
  */
 
 import { Msg, send } from '../../core/messages.js';
-import { $, el, clear, sourceReferences, applyTheme, formatDate, formatDateTime, openUrl, showError, progressLabel, showProgress, explainScanFailure, markSynthesisRead } from '../shared/dom.js';
+import { $, el, clear, sourceReferences, applyTheme, formatDateTime, showError, progressLabel, showProgress, explainScanFailure, markSynthesisRead, dashboardUrl } from '../shared/dom.js';
+import { publicationRow } from '../shared/publication-row.js';
 
 const content = $('#content');
 const profileSelect = $('#profile-select');
@@ -148,19 +149,7 @@ async function loadLatest() {
 }
 
 function openDashboard(hash) {
-  chrome.tabs.create({ url: chrome.runtime.getURL(`src/ui/dashboard/dashboard.html${hash}`) });
-}
-
-function publicationRow(result) {
-  const pub = result.publication;
-  return el('div', { class: 'publication' }, [
-    el('div', { class: 'title', text: pub.title || '(zonder titel)' }),
-    el('div', { class: 'muted', text: result.shortDescription }),
-    el('div', { class: 'links' }, [
-      el('span', { class: 'muted', text: `${pub.sourceName} · ${formatDate(pub.publishedDate)}` }),
-      pub.url ? el('button', { class: 'icon', text: 'Openen', onclick: () => openUrl(pub.url) }) : null,
-    ]),
-  ]);
+  chrome.tabs.create({ url: dashboardUrl(hash) });
 }
 
 /** Start een scan, of haakt aan bij de lopende. */

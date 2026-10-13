@@ -11,6 +11,7 @@ import { Msg, send } from '../../../core/messages.js';
 import { FULLTEXT_ORIGIN } from '../../../core/origins.js';
 import { log } from '../../../core/logger.js';
 import { el, sourceReferences, formatDate, formatDateTime, openUrl, markSynthesisRead } from '../../shared/dom.js';
+import { publicationRow } from '../../shared/publication-row.js';
 
 export async function renderScan(profileId, scanId) {
   const [profile, results] = await Promise.all([
@@ -118,7 +119,7 @@ export async function renderScan(profileId, scanId) {
   if (relevant.length === 0) {
     root.append(el('p', { class: 'muted', text: 'Geen relevante publicaties in deze scan.' }));
   } else {
-    relevant.forEach((result) => root.append(publicationRow(result)));
+    relevant.forEach((result) => root.append(resultRow(result)));
   }
 
   if (possible.length > 0) {
@@ -129,14 +130,14 @@ export async function renderScan(profileId, scanId) {
         text: 'Twijfelgevallen: het model kon niet goed beoordelen of deze publicaties over je vraag gaan, vaak omdat er weinig tekst beschikbaar was. Ze staan niet in de signalering. Open ze om zelf te kijken.',
       }),
     );
-    possible.forEach((result) => root.append(publicationRow(result)));
+    possible.forEach((result) => root.append(resultRow(result)));
   }
 
   if (filtered.length > 0) {
     const details = el('details', { style: 'margin-top:24px' }, [
       el('summary', { text: `Weggefilterd (${filtered.length})` }),
     ]);
-    filtered.forEach((result) => details.append(publicationRow(result)));
+    filtered.forEach((result) => details.append(resultRow(result)));
     root.append(details);
   }
 
@@ -238,10 +239,9 @@ function sourceStatusSection(statuses) {
   ]);
 }
 
-function publicationRow(result) {
+/** Publicatieregel met score, herkomst, gelezen en bewaren. */
+function resultRow(result) {
   const pub = result.publication;
-  const row = el('div', { class: result.isRead ? 'publication read' : 'publication' });
-
   const bookmarkButton = el('button', {
     class: 'icon',
     text: result.isBookmarked ? '★ Bewaard' : '☆ Bewaren',
@@ -257,56 +257,45 @@ function publicationRow(result) {
     },
   });
 
-  row.append(
-    el('div', { class: 'row', style: 'gap:6px; flex-wrap:wrap' }, [
-      el('span', { class: 'title', text: pub.title || '(zonder titel)' }),
-      typeof result.score === 'number'
-        ? el('span', { class: 'badge', title: 'Relevantiescore van het model (0–100)', text: `score ${result.score}` })
-        : null,
-      typeof result.prefilterScore === 'number'
-        ? el('span', {
-            class: 'badge',
-            title: 'Weggefilterd door de voorfilter (Jev), vóór de relevantiestap. Score 0–100.',
-            text: `voorfilter · score ${result.prefilterScore}`,
-          })
-        : null,
-      result.isNew
-        ? el('span', { class: 'badge ok', text: 'nieuw' })
-        : el('span', {
-            class: 'badge',
-            title: result.previousSynthesisAt
-              ? `Verwerkt in de signalering van ${formatDateTime(result.previousSynthesisAt)}`
-              : 'Deze publicatie kwam in een eerdere scan al langs',
-            text: result.previousSynthesisScanId
-              ? `eerder verwerkt · ${formatDate(result.previousSynthesisAt)}`
-              : 'eerder gezien',
-          }),
-    ]),
-    el('div', { class: 'muted', text: result.shortDescription }),
-    el('div', { class: 'links' }, [
-      el('span', { class: 'muted', text: `${pub.sourceName} · ${formatDate(pub.publishedDate)}` }),
-      pub.url
-        ? el('button', {
-            class: 'icon',
-            text: 'Openen',
-            onclick: () => {
-              // Eerst openen: een mislukte markering mag de link niet tegenhouden.
-              openUrl(pub.url);
-              if (result.isRead) return;
-              send(Msg.MARK_AS_READ, { publicationId: result.id })
-                .then(() => {
-                  result.isRead = true;
-                  row.classList.add('read');
-                })
-                .catch((err) => log.warn('Publicatie als gelezen markeren mislukt', err));
-            },
-          })
-        : null,
-      bookmarkButton,
-    ]),
-  );
+  const heading = el('div', { class: 'row', style: 'gap:6px; flex-wrap:wrap' }, [
+    el('span', { class: 'title', text: pub.title || '(zonder titel)' }),
+    typeof result.score === 'number'
+      ? el('span', { class: 'badge', title: 'Relevantiescore van het model (0–100)', text: `score ${result.score}` })
+      : null,
+    typeof result.prefilterScore === 'number'
+      ? el('span', {
+          class: 'badge',
+          title: 'Weggefilterd door de voorfilter (Jev), vóór de relevantiestap. Score 0–100.',
+          text: `voorfilter · score ${result.prefilterScore}`,
+        })
+      : null,
+    result.isNew
+      ? el('span', { class: 'badge ok', text: 'nieuw' })
+      : el('span', {
+          class: 'badge',
+          title: result.previousSynthesisAt
+            ? `Verwerkt in de signalering van ${formatDateTime(result.previousSynthesisAt)}`
+            : 'Deze publicatie kwam in een eerdere scan al langs',
+          text: result.previousSynthesisScanId
+            ? `eerder verwerkt · ${formatDate(result.previousSynthesisAt)}`
+            : 'eerder gezien',
+        }),
+  ]);
 
-  return row;
+  return publicationRow(result, {
+    className: result.isRead ? 'publication read' : 'publication',
+    heading,
+    onOpen: (row) => {
+      if (result.isRead) return;
+      send(Msg.MARK_AS_READ, { publicationId: result.id })
+        .then(() => {
+          result.isRead = true;
+          row.classList.add('read');
+        })
+        .catch((err) => log.warn('Publicatie als gelezen markeren mislukt', err));
+    },
+    actions: () => [bookmarkButton],
+  });
 }
 
 async function copySynthesis(synthesis, profile, button) {
