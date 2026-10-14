@@ -55,7 +55,7 @@ export async function getSettings() {
  * afwijken van standaard ← lokaal bestand (CR-03). Zo komt een key uit
  * local-settings.json niet in de browseropslag terecht, en verdwijnt hij weer
  * als hij uit het bestand gaat. Een bewuste afwijking blijft wel staan, ook
- * een lege waarde: die wint van het bestand (vault, zie hieronder).
+ * een lege waarde: die wint van het bestand (vault, zie vault-repository.js).
  * Geëxporteerd voor de tests.
  */
 export function settingsToStore(defaults, local, next) {

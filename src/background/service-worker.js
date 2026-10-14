@@ -58,7 +58,8 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 // De permissie kan buiten de instellingen om worden ingetrokken (via
-// edge://extensions). Dan moet het alarm mee verdwijnen.
+// edge://extensions). Zonder de permissie vuurt het alarm niet meer en is
+// `chrome.alarms` weg; hier staat alleen de logregel daarvan.
 chrome.permissions.onRemoved?.addListener((removed) => {
   if (removed.permissions?.includes('alarms')) {
     log.info('alarms-permissie ingetrokken, planner gestopt');
