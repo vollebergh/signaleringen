@@ -4,6 +4,7 @@
  * kiest hier bij welk profiel de bron hoort en bevestigt.
  */
 
+import { AppConfig } from '../../../core/config.js';
 import { Msg, send } from '../../../core/messages.js';
 import { SourceType, validateSourceUrl } from '../../../core/models.js';
 import { el, clear } from '../../shared/dom.js';
@@ -119,7 +120,7 @@ export async function renderAddSource() {
         : 'Deze bron stond al in het profiel.';
       setTimeout(() => {
         location.hash = `#profiel/${profileSelect.value}`;
-      }, 800);
+      }, AppConfig.UI_REDIRECT_AFTER_SAVE_MS);
     } catch (err) {
       status.className = 'error';
       status.textContent = err.message;

@@ -197,7 +197,7 @@ async function completeOnce(settings, route, { system, user, maxTokens, temperat
 
   const { response, text } = await post(url, headers, body, AppConfig.LLM_TIMEOUT_MS);
   if (!response.ok) {
-    log.error(`LLM-fout (${response.status}): ${text.slice(0, 500)}`);
+    log.error(`LLM-fout (${response.status}): ${text.slice(0, AppConfig.API_ERROR_LOG_MAX_CHARS)}`);
     if (isTransientStatus(response.status)) {
       throw new TransientLlmError(
         `LLM-API gaf ${response.status}: ${apiErrorMessage(text)}`,
@@ -240,9 +240,9 @@ async function completeOnce(settings, route, { system, user, maxTokens, temperat
 export function apiErrorMessage(text) {
   try {
     const parsed = JSON.parse(text);
-    return parsed?.error?.message ?? text.slice(0, 200);
+    return parsed?.error?.message ?? text.slice(0, AppConfig.API_ERROR_MESSAGE_MAX_CHARS);
   } catch {
-    return text.slice(0, 200);
+    return text.slice(0, AppConfig.API_ERROR_MESSAGE_MAX_CHARS);
   }
 }
 

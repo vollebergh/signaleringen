@@ -83,6 +83,9 @@ export const AppConfig = {
   PROMPT_TITLE_MAX_CHARS: 300,
   PROMPT_FILTER_TEXT_MAX_CHARS: 1_000,
   PROMPT_SYNTHESIS_TEXT_MAX_CHARS: 2_000,
+  PROMPT_SOURCE_NAME_MAX_CHARS: 200,
+  /** De korte beoordeling van het filter, als kern in de synthese. */
+  PROMPT_SYNTHESIS_SUMMARY_MAX_CHARS: 300,
 
   /**
    * Relevantie als score (B-59). Het model geeft per publicatie 0–100; de
@@ -224,6 +227,32 @@ export const AppConfig = {
   // Export/import
   EXPORT_FORMAT: 'signaleringen-export',
   EXPORT_FORMAT_VERSION: 1,
+
+  // Foutmeldingen van de API: zoveel tekens in de melding aan de gebruiker,
+  // zoveel in het log van de worker.
+  API_ERROR_MESSAGE_MAX_CHARS: 200,
+  API_ERROR_LOG_MAX_CHARS: 500,
+
+  /**
+   * Houdt de service worker wakker tijdens een scan: Chrome stopt hem na 30 s
+   * zonder extensie-API-aanroep. Ruim daaronder.
+   */
+  KEEPALIVE_PING_MS: 20_000,
+
+  /** Geselecteerde tekst die het contextmenu meegeeft aan *pagina als bron*. */
+  CONTEXT_SELECTION_MAX_CHARS: 2_000,
+
+  /** PDF-pagina's met een zoekterm die een fragment leveren (B-63). */
+  FULLTEXT_PDF_MAX_HIT_PAGES: 3,
+
+  /** Kleur van de teller op het extensiepictogram (B-54). */
+  BADGE_COLOR: '#4a5f7a',
+
+  // Hoe lang een korte bevestiging in de UI blijft staan, of hoe lang de UI
+  // wacht voor ze doorgaat naar het volgende scherm (milliseconden).
+  UI_CONFIRMATION_MS: 1_500,
+  UI_REDIRECT_AFTER_SAVE_MS: 800,
+  UI_REDIRECT_AFTER_IMPORT_MS: 1_200,
 };
 
 /**

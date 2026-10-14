@@ -77,7 +77,7 @@ export async function filterPublications(publications, userQuery, settings, onBa
         fencePublication(
           index,
           [
-            ['bron', sanitizeUntrusted(pub.sourceName, 200)],
+            ['bron', sanitizeUntrusted(pub.sourceName, AppConfig.PROMPT_SOURCE_NAME_MAX_CHARS)],
             ['titel', sanitizeUntrusted(pub.title, AppConfig.PROMPT_TITLE_MAX_CHARS)],
             ['tekst', sanitizeUntrusted(pub.description, AppConfig.PROMPT_FILTER_TEXT_MAX_CHARS)],
           ],

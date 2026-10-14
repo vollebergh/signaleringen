@@ -267,7 +267,7 @@ export async function renderProfileEdit(profileId) {
     }
     const openOverheidHint = el('div', {
       class: 'hint',
-      text: 'Stel de zoekopdracht samen op open.overheid.nl (Uitgebreid zoeken: ministerie, documentsoort, eventueel een zoekterm) en plak de URL uit de adresbalk. Kies je op de site een periode (bijv. "Afgelopen jaar"), dan haalt de extensie die hele periode op, tot maximaal 200 publicaties; "afgelopen jaar" schuift mee. Zonder periode geldt de terugkijktijd van dit profiel.',
+      text: `Stel de zoekopdracht samen op open.overheid.nl (Uitgebreid zoeken: ministerie, documentsoort, eventueel een zoekterm) en plak de URL uit de adresbalk. Kies je op de site een periode (bijv. "Afgelopen jaar"), dan haalt de extensie die hele periode op, tot maximaal ${AppConfig.OPEN_OVERHEID_MAX_RESULTS} publicaties; "afgelopen jaar" schuift mee. Zonder periode geldt de terugkijktijd van dit profiel.`,
     });
     syncType();
 

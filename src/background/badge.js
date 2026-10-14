@@ -7,6 +7,7 @@
  * wel (storage.local). Daarom zet de worker hem bij elke start opnieuw.
  */
 
+import { AppConfig } from '../core/config.js';
 import { log } from '../core/logger.js';
 import { getProfile } from '../data/profile-repository.js';
 import { getSynthesis } from '../data/scan-repository.js';
@@ -48,7 +49,7 @@ export async function updateBadge() {
     await chrome.action.setBadgeText({ text: badgeText(count) });
     await chrome.action.setTitle({ title: badgeTitle(count) });
     if (count > 0) {
-      await chrome.action.setBadgeBackgroundColor({ color: '#4a5f7a' });
+      await chrome.action.setBadgeBackgroundColor({ color: AppConfig.BADGE_COLOR });
       await chrome.action.setBadgeTextColor?.({ color: '#ffffff' });
     }
   } catch (err) {

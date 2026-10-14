@@ -7,6 +7,7 @@
  * als onderbouwing.
  */
 
+import { AppConfig } from '../../../core/config.js';
 import { Msg, send } from '../../../core/messages.js';
 import { FULLTEXT_ORIGIN } from '../../../core/origins.js';
 import { log } from '../../../core/logger.js';
@@ -311,7 +312,7 @@ async function copySynthesis(synthesis, profile, button) {
     button.textContent = 'Gekopieerd';
     setTimeout(() => {
       button.textContent = original;
-    }, 1500);
+    }, AppConfig.UI_CONFIRMATION_MS);
   } catch {
     button.textContent = 'Kopiëren mislukt';
   }

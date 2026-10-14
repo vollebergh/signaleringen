@@ -7,6 +7,7 @@
  * de tweede bent.
  */
 
+import { AppConfig } from '../../../core/config.js';
 import { Msg, send } from '../../../core/messages.js';
 import { el, sourceReferences, formatDateTime, markSynthesisRead } from '../../shared/dom.js';
 
@@ -49,7 +50,7 @@ export async function renderSyntheses(profileId) {
   root.append(
     el('p', {
       class: 'muted',
-      text: `${syntheses.length} signalering${syntheses.length === 1 ? '' : 'en'} bewaard. Er blijven maximaal 5 scans per profiel bewaard; oudere signaleringen worden opgeruimd.`,
+      text: `${syntheses.length} signalering${syntheses.length === 1 ? '' : 'en'} bewaard. Er blijven maximaal ${AppConfig.SCANS_TO_KEEP_PER_PROFILE} scans per profiel bewaard; oudere signaleringen worden opgeruimd.`,
     }),
   );
 
@@ -128,7 +129,7 @@ async function copy(synthesis, profile, button) {
     button.textContent = 'Gekopieerd';
     setTimeout(() => {
       button.textContent = original;
-    }, 1500);
+    }, AppConfig.UI_CONFIRMATION_MS);
   } catch {
     button.textContent = 'Kopiëren mislukt';
   }

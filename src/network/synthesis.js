@@ -63,8 +63,8 @@ export async function synthesizeProfile(profile, relevant, settings) {
         index + 1,
         [
           ['titel', sanitizeUntrusted(pub.title, AppConfig.PROMPT_TITLE_MAX_CHARS)],
-          ['bron', `${sanitizeUntrusted(pub.sourceName, 200)} — ${date}`],
-          ['kern', sanitizeUntrusted(result.shortDescription, 300)],
+          ['bron', `${sanitizeUntrusted(pub.sourceName, AppConfig.PROMPT_SOURCE_NAME_MAX_CHARS)} — ${date}`],
+          ['kern', sanitizeUntrusted(result.shortDescription, AppConfig.PROMPT_SYNTHESIS_SUMMARY_MAX_CHARS)],
           ['tekst', sanitizeUntrusted(pub.description, AppConfig.PROMPT_SYNTHESIS_TEXT_MAX_CHARS)],
         ],
         marker,

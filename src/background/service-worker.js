@@ -16,6 +16,7 @@
  * popup wegwerpbaar: hem sluiten breekt nooit een lopende scan af.
  */
 
+import { AppConfig } from '../core/config.js';
 import { Msg } from '../core/messages.js';
 import { log } from '../core/logger.js';
 import { assertValidSource, createProfile, createSource, SourceType } from '../core/models.js';
@@ -130,7 +131,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     params.set('bronUrl', info.linkUrl ?? info.pageUrl ?? tab?.url ?? '');
     params.set('bronNaam', tab?.title ?? '');
   } else if (info.menuItemId === MENU_ADD_SELECTION) {
-    params.set('selectie', (info.selectionText ?? '').slice(0, 2000));
+    params.set('selectie', (info.selectionText ?? '').slice(0, AppConfig.CONTEXT_SELECTION_MAX_CHARS));
     params.set('bronUrl', info.pageUrl ?? tab?.url ?? '');
     params.set('bronNaam', tab?.title ?? '');
   } else {

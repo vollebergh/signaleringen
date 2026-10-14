@@ -7,6 +7,7 @@
  * overschrijft is niet terug te draaien.
  */
 
+import { AppConfig } from '../../../core/config.js';
 import { Msg, send } from '../../../core/messages.js';
 import { el, clear, formatDateTime } from '../../shared/dom.js';
 
@@ -274,7 +275,7 @@ function importSection() {
         importStatus.textContent = `${result.imported} toegevoegd, ${result.replaced} vervangen.`;
         setTimeout(() => {
           location.hash = '#profielen';
-        }, 1200);
+        }, AppConfig.UI_REDIRECT_AFTER_IMPORT_MS);
       } catch (err) {
         importStatus.className = 'error';
         importStatus.textContent = err.message;

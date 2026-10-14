@@ -15,6 +15,7 @@
  * draait. Voor tekstextractie is dat snel genoeg (± 0,01 s per pagina).
  */
 
+import { AppConfig } from '../core/config.js';
 import * as pdfjs from '../../vendor/pdfjs/pdf.mjs';
 import * as pdfjsWorker from '../../vendor/pdfjs/pdf.worker.mjs';
 
@@ -28,7 +29,7 @@ pdfjs.GlobalWorkerOptions.workerSrc = 'pdf.worker.mjs'; // niet gebruikt, maar p
  * @returns {Promise<string>} tekst van de pagina's met een treffer, gescheiden
  *   door een spatie; leeg zonder treffer of als de PDF niet te lezen is
  */
-export async function extractPdfText(data, terms, { maxPages = 600, maxHitPages = 3 } = {}) {
+export async function extractPdfText(data, terms, { maxPages = AppConfig.FULLTEXT_PDF_MAX_PAGES, maxHitPages = AppConfig.FULLTEXT_PDF_MAX_HIT_PAGES } = {}) {
   if (!data?.length || !terms?.length) return '';
   const doc = await pdfjs.getDocument({
     data,
