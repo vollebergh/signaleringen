@@ -20,7 +20,7 @@ import { getSettings, isConfigured, missingConfigMessage } from '../data/setting
 import { withApiKey } from '../data/vault-repository.js';
 import { getProfile } from '../data/profile-repository.js';
 import { normalizeLookbackDays, normalizeSynthesisMaxArticles } from '../core/models.js';
-import { saveScan, saveSynthesis, pruneOldScans } from '../data/scan-repository.js';
+import { saveScan, saveSynthesis, pruneOldScans, getScanResults } from '../data/scan-repository.js';
 import { markUnread } from '../data/unread-repository.js';
 import {
   loadSeen,
@@ -119,6 +119,46 @@ export function runScan(profileId, options = {}) {
   });
   running.set(profileId, run);
   return run;
+}
+
+/**
+ * Stelt alsnog de signalering op voor een opgeslagen scan zonder signalering,
+ * of met een mislukte (B-74). Bijvoorbeeld als de browser sloot tijdens
+ * *Signalering opstellen…*: de publicaties zijn dan al beoordeeld en als
+ * gezien vastgelegd, dus een nieuwe scan biedt ze niet meer aan. Kost één
+ * modelaanroep, via dezelfde fase als de scan.
+ * @param {string} profileId
+ * @param {string} scanId
+ * @returns {Promise<{scanId: string, relevantCount: number, error: string | null}>}
+ */
+export function synthesizeScan(profileId, scanId) {
+  if (running.has(profileId)) {
+    return Promise.reject(new Error('Er loopt al een scan voor dit profiel. Probeer het opnieuw als die klaar is.'));
+  }
+  const run = withKeepalive(() => executeSynthesis(profileId, scanId)).finally(() => {
+    running.delete(profileId);
+  });
+  running.set(profileId, run);
+  return run;
+}
+
+async function executeSynthesis(profileId, scanId) {
+  const results = await getScanResults(scanId);
+  if (!results || results.scan.profileId !== profileId) throw new Error('Scan niet gevonden');
+  if (results.synthesis?.text) throw new Error('Deze scan heeft al een signalering.');
+  if (results.relevant.length === 0) throw new Error('Deze scan heeft geen relevante publicaties.');
+
+  const { profile, settings } = await loadProfileAndSettings(profileId);
+  const synthesis = await synthesize(profileId, scanId, profile, results.relevant, settings, {});
+  setProgress(profileId, {
+    phase: 'done',
+    scanId,
+    relevantCount: results.relevant.length,
+    newCount: results.scan.newCount ?? 0,
+    totalFetched: results.scan.totalFetched,
+  });
+  log.info(`Signalering alsnog opgesteld voor '${profile.name}'${synthesis.error ? ' (mislukt)' : ''}`);
+  return { scanId, relevantCount: results.relevant.length, error: synthesis.error };
 }
 
 /**
@@ -248,26 +288,30 @@ function failEarly(profileId, message, extra = {}) {
   throw new Error(message);
 }
 
-/**
- * Voorbereiding: profiel, instellingen met key, de bronnen van deze scan en
- * de toestemmingen. Elke fout stopt de scan vóór er iets is opgehaald.
- */
-async function prepareScan(profileId, options) {
+/** Profiel en instellingen met key; zet bij een fout de voortgang op fout. */
+async function loadProfileAndSettings(profileId) {
   const profile = await getProfile(profileId);
   if (!profile) throw new Error('Profiel niet gevonden');
 
   const stored = await getSettings();
   if (!(await isConfigured(stored))) failEarly(profileId, missingConfigMessage(stored));
 
-  // Key uit de vault halen vóór er iets opgehaald wordt: een vergrendelde
-  // vault moet de scan tegenhouden, niet pas halverwege laten stranden.
-  let settings;
   try {
-    settings = await withApiKey(stored);
+    return { profile, settings: await withApiKey(stored) };
   } catch (err) {
     setProgress(profileId, { phase: 'error', message: err.message });
     throw err;
   }
+}
+
+/**
+ * Voorbereiding: profiel, instellingen met key, de bronnen van deze scan en
+ * de toestemmingen. Elke fout stopt de scan vóór er iets is opgehaald.
+ */
+async function prepareScan(profileId, options) {
+  // Key uit de vault halen vóór er iets opgehaald wordt: een vergrendelde
+  // vault moet de scan tegenhouden, niet pas halverwege laten stranden.
+  const { profile, settings } = await loadProfileAndSettings(profileId);
 
   // Een scan kan tot een deelverzameling bronnen beperkt worden, zodat je één
   // bron los kunt bijwerken zonder de rest opnieuw op te halen.
@@ -474,6 +518,7 @@ function toResult(scanId, verdict, item) {
 /**
  * Stelt de signalering op en slaat hem op. Een mislukte synthese wordt een
  * synthese met `error`; de scan zelf blijft staan.
+ * @returns {Promise<{error: string | null}>}
  */
 async function synthesize(profileId, scanId, profile, relevant, settings, options) {
   // Alleen de hoogst scorende gaan mee (B-45); de rest blijft relevant
@@ -503,16 +548,19 @@ async function synthesize(profileId, scanId, profile, relevant, settings, option
       scanId,
       forSynthesis.map((r) => r.dedupeKey),
     );
+    return { error: null };
   } catch (err) {
     log.error('Synthese mislukt, scanresultaten blijven bewaard', err);
+    const error = err.message ?? String(err);
     await saveSynthesis({
       scanId,
       profileId,
       createdAt: Date.now(),
       text: '',
       sources: [],
-      error: err.message ?? String(err),
+      error,
     });
+    return { error };
   }
 }
 

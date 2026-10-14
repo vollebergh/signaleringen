@@ -263,7 +263,11 @@ Dat is op drie plekken zichtbaar:
   een signalering zijn verwerkt.
 - **Scanresultaat** — per bron een regel met aantallen en een knop om de bron te
   openen; per publicatie een label `nieuw`, `eerder gezien` of
-  `eerder verwerkt · <datum>`.
+  `eerder verwerkt · <datum>`. Heeft een scan relevante publicaties maar geen
+  signalering (de browser sloot tijdens het opstellen, of de synthese mislukte),
+  dan staat er een knop *Signalering opstellen*. Die publicaties tellen al als
+  gezien en komen bij een volgende scan niet terug; de knop kost één
+  modelaanroep en beoordeelt niets opnieuw.
 - **Per profiel** de schakelaar *Alleen nieuwe publicaties beoordelen* (standaard
   aan). Uit zetten laat elke scan alles opnieuw beoordelen — nuttig als je de
   vraagstelling hebt gewijzigd, maar het kost meer tokens.
@@ -421,7 +425,7 @@ antwoorden, de https-eis, de controle van bronnen en de import
 (`test/worker.test.mjs` en `test/hardening.test.mjs`), sleutels uit een
 feed die op het prototype van een object vallen (`test/js-protocol.test.mjs`),
 en de scan als geheel tegen een echte IndexedDB: ontdubbelen, wat als gezien
-telt, een mislukte bron of synthese, en het opruimen van de
+telt, een mislukte bron of synthese, een signalering alsnog opstellen, en het opruimen van de
 gezien-administratie (`test/scan.test.mjs`).
 
 ## Relevant, mogelijk relevant, weggefilterd

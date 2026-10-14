@@ -35,7 +35,7 @@ import { testConnection } from '../network/llm-transport.js';
 import { testPrefilter } from '../network/prefilter.js';
 import { connectionErrors } from '../core/routing.js';
 
-import { runScan, getProgress, isScanning, confirmScan } from './scan-runner.js';
+import { runScan, synthesizeScan, getProgress, isScanning, confirmScan } from './scan-runner.js';
 import { applySchedule, runDueScans, ALARM_NAME } from './scheduler.js';
 import { parseOpml } from './opml.js';
 import { updateBadge, getUnreadProfileIds } from './badge.js';
@@ -196,6 +196,8 @@ const handlers = {
   },
 
   [Msg.START_SCAN]: ({ profileId, sourceIds }) => runScan(profileId, { sourceIds }),
+
+  [Msg.SYNTHESIZE_SCAN]: ({ profileId, scanId }) => synthesizeScan(profileId, scanId),
 
   [Msg.GET_SCAN_STATE]: async ({ profileId }) => ({
     ...(await getProgress(profileId)),

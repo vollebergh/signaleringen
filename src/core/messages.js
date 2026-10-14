@@ -27,6 +27,8 @@ export const Msg = Object.freeze({
   // Antwoord op "doorgaan?" bij een grote scan (B-45)
   CONFIRM_SCAN: 'scan/confirm',
   LIST_BOOKMARKS: 'scan/bookmarks',
+  // Signalering alsnog opstellen voor een scan zonder signalering (B-74)
+  SYNTHESIZE_SCAN: 'scan/synthesize',
 
   // Syntheses
   LIST_SYNTHESES: 'synthesis/list',
@@ -65,6 +67,7 @@ export const Msg = Object.freeze({
 export const SEND_TIMEOUT_MS = 30_000;
 const SEND_TIMEOUTS_MS = {
   [Msg.START_SCAN]: null, // geen grens: loopt de hele scan
+  [Msg.SYNTHESIZE_SCAN]: null, // idem, één modelaanroep met herhaalpogingen
   [Msg.TEST_SOURCE]: 120_000, // ophalen met herhaalpogingen, open.overheid tot 4 pagina's
   [Msg.TEST_CONNECTION]: 150_000, // één LLM-aanroep, time-out 120 s
   [Msg.TEST_PREFILTER]: 60_000,

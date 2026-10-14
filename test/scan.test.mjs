@@ -116,7 +116,8 @@ const { saveProfile } = await import('../src/data/profile-repository.js');
 const { getScansForProfile, getPublicationsForScan, getSynthesis } = await import('../src/data/scan-repository.js');
 const { loadSeen, recordSeen, refreshSeen, pruneSeen, markSynthesised } = await import('../src/data/history-repository.js');
 const { getUnread } = await import('../src/data/unread-repository.js');
-const { runScan } = await import('../src/background/scan-runner.js');
+const { runScan, synthesizeScan } = await import('../src/background/scan-runner.js');
+const { Store, transaction } = await import('../src/data/db.js');
 
 await saveSettings({ directApiKey: 'sk-test' });
 
@@ -296,6 +297,67 @@ test('scan: zonder bronnen of zonder toestemming stopt de scan vóór het ophale
     chrome.permissions.contains = real;
   }
   assert.equal((await getScansForProfile(profile.id)).length, 0);
+});
+
+// ── B-74: signalering alsnog opstellen ─────────────────────────────────────
+
+test('synthesizeScan: zonder signalering (browser dicht tijdens het opstellen) alsnog opstellen', async () => {
+  const a = feed([item('j1', 'j1 relevant'), item('j2', 'j2 relevant'), item('j3')]);
+  const profile = await profileWith([a]);
+  const { scanId } = await runScan(profile.id);
+  // Zoals na het sluiten van de browser in de synthesefase: de scan staat er,
+  // de signalering niet. (Dat "verwerkt" klopt, dekt de test hieronder.)
+  await transaction(Store.SYNTHESES, 'readwrite', (store) => store.delete(scanId));
+  llm.calls.length = 0;
+
+  const outcome = await synthesizeScan(profile.id, scanId);
+
+  assert.deepEqual(outcome, { scanId, relevantCount: 2, error: null });
+  assert.deepEqual(llm.calls.map((c) => c.kind), ['synthesis'], 'alleen de synthese, niet opnieuw beoordelen');
+  const synthesis = await getSynthesis(scanId);
+  assert.equal(synthesis.text, 'Er gebeurde iets [1].');
+  assert.deepEqual(synthesis.selection, { used: 2, relevant: 2 });
+  assert.equal((await getUnread())[profile.id], undefined, 'op verzoek: niet op ongelezen');
+  assert.equal(progressMessages.at(-1).phase, 'done');
+  assert.equal((await getScansForProfile(profile.id)).length, 1, 'geen nieuwe scan');
+
+  await assert.rejects(synthesizeScan(profile.id, scanId), /al een signalering/);
+});
+
+test('synthesizeScan: na een mislukte synthese opnieuw proberen markeert als verwerkt', async () => {
+  const a = feed([item('k1', 'k1 relevant'), item('k2')]);
+  const profile = await profileWith([a]);
+  llm.synthesisFails = true;
+  let scanId;
+  try {
+    ({ scanId } = await runScan(profile.id));
+    const failed = await synthesizeScan(profile.id, scanId);
+    assert.match(failed.error, /400/);
+    assert.match((await getSynthesis(scanId)).error, /400/);
+  } finally {
+    llm.synthesisFails = false;
+  }
+
+  const outcome = await synthesizeScan(profile.id, scanId);
+
+  assert.equal(outcome.error, null);
+  const synthesis = await getSynthesis(scanId);
+  assert.equal(synthesis.text, 'Er gebeurde iets [1].');
+  assert.equal(synthesis.error, undefined);
+  const synthesised = [...(await loadSeen(profile.id)).values()].filter((r) => r.synthesisScanId === scanId);
+  assert.deepEqual(synthesised.map((r) => r.title), ['k1 relevant']);
+});
+
+test('synthesizeScan: niet tijdens een scan, niet zonder relevante publicaties, niet voor een ander profiel', async () => {
+  const a = feed([item('l1')]);
+  const profile = await profileWith([a]);
+  const { scanId } = await runScan(profile.id);
+  await assert.rejects(synthesizeScan(profile.id, scanId), /geen relevante publicaties/);
+  await assert.rejects(synthesizeScan('ander-profiel', scanId), /Scan niet gevonden/);
+
+  const pending = runScan(profile.id);
+  await assert.rejects(synthesizeScan(profile.id, scanId), /loopt al een scan/);
+  await pending;
 });
 
 // ── CR-23 punt 3: seen-administratie tegen een echte store ─────────────────

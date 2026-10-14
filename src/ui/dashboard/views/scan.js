@@ -11,7 +11,16 @@ import { AppConfig } from '../../../core/config.js';
 import { Msg, send } from '../../../core/messages.js';
 import { FULLTEXT_ORIGIN } from '../../../core/origins.js';
 import { log } from '../../../core/logger.js';
-import { el, sourceReferences, formatDate, formatDateTime, openUrl, markSynthesisRead } from '../../shared/dom.js';
+import {
+  el,
+  clear,
+  sourceReferences,
+  formatDate,
+  formatDateTime,
+  openUrl,
+  markSynthesisRead,
+  explainScanFailure,
+} from '../../shared/dom.js';
 import { publicationRow } from '../../shared/publication-row.js';
 
 export async function renderScan(profileId, scanId) {
@@ -73,15 +82,10 @@ export async function renderScan(profileId, scanId) {
   // ── Signalering ───────────────────────────────────────────────────────────
   root.append(el('h3', { class: 'section-title', text: 'Signalering' }));
 
-  if (synthesis?.error) {
+  if (synthesis?.error && relevant.length > 0) {
     root.append(
       el('p', { class: 'error', text: `Synthese mislukt: ${synthesis.error}` }),
-      el('button', {
-        text: 'Opnieuw scannen',
-        onclick: () => {
-          location.hash = `#profielen`;
-        },
-      }),
+      synthesizeAction(root, profileId, scanId, relevant.length, 'Opnieuw proberen'),
     );
   } else if (synthesis?.text) {
     markSynthesisRead(profileId, synthesis.createdAt);
@@ -103,15 +107,19 @@ export async function renderScan(profileId, scanId) {
         sourceReferences(synthesis.sources),
       ].filter(Boolean),
     );
-  } else {
+  } else if (relevant.length > 0) {
+    // Geen signalering bij relevante publicaties: de scan is tijdens het
+    // opstellen gestopt, bijvoorbeeld doordat de browser sloot (B-74).
     root.append(
       el('p', {
         class: 'muted',
-        text:
-          relevant.length === 0
-            ? 'Geen relevante publicaties gevonden, dus geen signalering opgesteld.'
-            : 'Nog geen signalering beschikbaar voor deze scan.',
+        text: 'Er is geen signalering opgesteld, bijvoorbeeld omdat de browser sloot terwijl hij werd gemaakt. De relevante publicaties hieronder zijn al beoordeeld en komen bij een volgende scan niet opnieuw langs.',
       }),
+      synthesizeAction(root, profileId, scanId, relevant.length, 'Signalering opstellen'),
+    );
+  } else {
+    root.append(
+      el('p', { class: 'muted', text: 'Geen relevante publicaties gevonden, dus geen signalering opgesteld.' }),
     );
   }
 
@@ -143,6 +151,35 @@ export async function renderScan(profileId, scanId) {
   }
 
   return root;
+}
+
+/**
+ * Knop die de signalering alsnog laat opstellen (B-74): één modelaanroep over
+ * de al beoordeelde publicaties. Daarna wordt de hele weergave opnieuw
+ * opgebouwd, met de signalering of de nieuwe foutmelding.
+ */
+function synthesizeAction(root, profileId, scanId, relevantCount, label) {
+  const status = el('span', { class: 'muted' });
+  const button = el('button', {
+    class: 'primary',
+    text: label,
+    title: `Eén modelaanroep over de ${relevantCount} relevante publicatie(s) van deze scan`,
+    onclick: async () => {
+      button.disabled = true;
+      status.classList.remove('error');
+      clear(status);
+      status.append(el('span', { class: 'spinner' }), el('span', { text: ' Signalering opstellen…' }));
+      try {
+        await send(Msg.SYNTHESIZE_SCAN, { profileId, scanId });
+        root.replaceWith(await renderScan(profileId, scanId));
+      } catch (err) {
+        status.classList.add('error');
+        status.textContent = await explainScanFailure(profileId, err);
+        button.disabled = false;
+      }
+    },
+  });
+  return el('div', { class: 'actions' }, [button, status]);
 }
 
 /**
