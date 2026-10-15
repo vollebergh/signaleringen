@@ -64,8 +64,9 @@ async function loadLatest() {
   content.append(el('p', { class: 'muted', text: 'Laden…' }));
 
   try {
-    const [latest, scanState] = await Promise.all([
+    const [latest, latestSynthesis, scanState] = await Promise.all([
       send(Msg.GET_LATEST_SCAN, { profileId }),
+      send(Msg.GET_LATEST_SYNTHESIS, { profileId }),
       send(Msg.GET_SCAN_STATE, { profileId }),
     ]);
     clear(content);
@@ -104,33 +105,8 @@ async function loadLatest() {
         class: 'muted',
         text: `${latest.relevant.length} relevant · ${formatDateTime(latest.scan.scanDate)}`,
       }),
-    );
-
-    if (latest.synthesis?.text) {
-      for (const warning of latest.synthesis.warnings ?? []) {
-        content.append(el('p', { class: 'error', text: `⚠ ${warning}` }));
-      }
-      const { selection } = latest.synthesis;
-      if (selection && selection.used < selection.relevant) {
-        content.append(el('p', { class: 'muted', text: `Gebaseerd op de ${selection.used} hoogst scorende van ${selection.relevant} relevante publicaties.` }));
-      }
-      content.append(el('div', { class: 'synthesis', text: latest.synthesis.text }));
-      markSynthesisRead(profileId, latest.synthesis.createdAt);
-      const references = sourceReferences(latest.synthesis.sources);
-      if (references) content.append(references);
-    } else if (latest.synthesis?.error) {
-      content.append(el('p', { class: 'error', text: `Synthese mislukt: ${latest.synthesis.error}` }));
-    }
-
-    // Met een signalering staan de publicaties al genummerd in de
-    // bronverwijzingen; alleen zonder signalering de losse lijst.
-    if (latest.relevant.length > 0 && !latest.synthesis?.sources?.length) {
-      content.append(el('div', { class: 'section-title', text: 'Publicaties' }));
-      latest.relevant.forEach((result) => content.append(publicationRow(result)));
-    }
-
-    content.append(
-      el('div', { class: 'actions', style: 'margin-top:16px' }, [
+      // Boven de signalering, anders vallen ze bij een lange tekst buiten beeld (B-77).
+      el('div', { class: 'actions' }, [
         el('button', {
           class: 'icon',
           text: 'Alle signaleringen →',
@@ -143,6 +119,37 @@ async function loadLatest() {
         }),
       ]),
     );
+
+    if (latest.synthesis?.error && !latest.synthesis.text) {
+      content.append(el('p', { class: 'error', text: `Synthese mislukt: ${latest.synthesis.error}` }));
+    }
+
+    // Leverde de laatste scan geen signalering op (bijv. 0 nieuw), dan de
+    // vorige laten staan, zoals de popup doet (B-76).
+    const synthesis = latest.synthesis?.text ? latest.synthesis : latestSynthesis;
+    if (synthesis?.text) {
+      if (synthesis !== latest.synthesis) {
+        content.append(el('p', { class: 'muted', text: `Laatste scan zonder nieuwe signalering. Hieronder de signalering van ${formatDateTime(synthesis.createdAt)}.` }));
+      }
+      for (const warning of synthesis.warnings ?? []) {
+        content.append(el('p', { class: 'error', text: `⚠ ${warning}` }));
+      }
+      const { selection } = synthesis;
+      if (selection && selection.used < selection.relevant) {
+        content.append(el('p', { class: 'muted', text: `Gebaseerd op de ${selection.used} hoogst scorende van ${selection.relevant} relevante publicaties.` }));
+      }
+      content.append(el('div', { class: 'synthesis', text: synthesis.text }));
+      markSynthesisRead(profileId, synthesis.createdAt);
+      const references = sourceReferences(synthesis.sources);
+      if (references) content.append(references);
+    }
+
+    // Met een signalering staan de publicaties al genummerd in de
+    // bronverwijzingen; alleen zonder signalering de losse lijst.
+    if (latest.relevant.length > 0 && !latest.synthesis?.sources?.length) {
+      content.append(el('div', { class: 'section-title', text: 'Publicaties' }));
+      latest.relevant.forEach((result) => content.append(publicationRow(result)));
+    }
   } catch (err) {
     showError(content, err);
   }

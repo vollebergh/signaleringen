@@ -48,3 +48,8 @@ header {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* Wint van de gedempte kleur hierboven zolang de spinner draait (B-77). */
+.profile .status:has(> .spinner) {
+  color: var(--text);
+}

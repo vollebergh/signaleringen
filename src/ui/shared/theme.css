@@ -301,14 +301,24 @@ label {
   color: var(--text-muted);
 }
 
+/* inline-block: in een gewone statusregel (popup, profieloverzicht) zou een
+   inline span breedte en hoogte negeren en vrijwel onzichtbaar zijn (B-77). */
 .spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid var(--border);
+  display: inline-block;
+  vertical-align: -3px;
+  width: 16px;
+  height: 16px;
+  border: 2.5px solid var(--border);
   border-top-color: var(--accent);
+  border-right-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
   flex-shrink: 0;
+}
+
+/* Statustekst naast een spinner in de tekstkleur, niet gedempt (B-77). */
+:has(> .spinner) {
+  color: var(--text);
 }
 
 @keyframes spin {
