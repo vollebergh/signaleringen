@@ -74,20 +74,32 @@ OpenRouter-workspace `signaleringen`, met een eigen uitgavenlimiet (B-42). In
 de extensie is het key-veld leeg; de collega plakt de eigen key erin (stap 2
 van *Eerste configuratie*). Zie besluit B-D09 in de vault.
 
-Maak het pakket altijd uit git, nooit door de map te kopiëren of te zippen:
+Maak het pakket altijd met het inpakscript, nooit door de map te kopiëren of
+te zippen (B-73):
 
 ```bash
-mkdir -p dist && git archive --format=zip -o dist/signaleringen-$(git describe --always).zip HEAD
+npm run package                 # dist/signaleringen-<versie>-chromium.zip en -firefox.zip
+npm run package -- chromium     # alleen Edge/Chrome
 ```
 
-`git archive` neemt alleen gecommitte bestanden mee, dus `local-settings.json`
-met jouw key zit er gegarandeerd niet in. Controleer het zo:
+Het script (`scripts/package.mjs`, Node 22.2+, geen afhankelijkheden):
 
-```bash
-unzip -l dist/signaleringen-*.zip | grep local-settings
-```
+- neemt alleen **gecommitte** bestanden uit `HEAD`, en daarvan alleen de
+  allowlist: `manifest.json`, `src/`, `vendor/pdfjs/` en de iconen 16–128.
+  `local-settings.json`, `test/`, `node_modules/`, `.git`, `scripts/`,
+  README's en `icon-300.png` (alleen voor de store-listing) gaan nooit mee;
+- weigert als er niet-gecommitte wijzigingen in die bestanden zijn;
+- schrijft per browser een eigen manifest: Chromium zonder `background.scripts`,
+  `sidebar_action` en `browser_specific_settings`; Firefox zonder
+  `background.service_worker`, `side_panel`, `minimum_chrome_version` en de
+  permissie `sidePanel`;
+- controleert of alles waar het manifest naar verwijst in het pakket zit;
+- draait `gitleaks dir` op de inhoud en zoekt zelf naar OpenRouter-keys en
+  naar de waarden uit jouw `local-settings.json`. Bij een treffer, of als
+  `gitleaks` niet is geïnstalleerd, komt er geen pakket.
 
-Alleen `local-settings.example.json` hoort daar te staan.
+Hetzelfde commit geeft hetzelfde pakket (vaste volgorde, commitdatum als
+bestandsdatum).
 
 ## Permissiemodel
 
@@ -426,7 +438,8 @@ antwoorden, de https-eis, de controle van bronnen en de import
 feed die op het prototype van een object vallen (`test/js-protocol.test.mjs`),
 en de scan als geheel tegen een echte IndexedDB: ontdubbelen, wat als gezien
 telt, een mislukte bron of synthese, een signalering alsnog opstellen, en het opruimen van de
-gezien-administratie (`test/scan.test.mjs`).
+gezien-administratie (`test/scan.test.mjs`). Tot slot het inpakscript: allowlist,
+manifest per browser, keycontrole en de zip zelf (`test/package.test.mjs`).
 
 ## Relevant, mogelijk relevant, weggefilterd
 
@@ -506,6 +519,7 @@ extension/
 │   ├── network/                XML-parser, feed-fetcher, LLM-client, HTTP
 │   ├── background/             service worker, scan-orkestratie, planner, permissies
 │   └── ui/                     popup, dashboard, side panel, gedeelde stijl
+├── scripts/package.mjs         inpakscript voor de store (niet in het pakket)
 └── test/
 ```
 
