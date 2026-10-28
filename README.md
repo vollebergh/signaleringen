@@ -341,8 +341,8 @@ Het volledige beleid staat in [PRIVACY.md](PRIVACY.md). Samengevat:
   van die aanbieder. Bij OpenRouter kan dat afdwingbaar met de privacy-instelling
   van het account (alleen *zero data retention*-aanbieders of zonder training).
 - **Voorfilter en uitwijk** sturen dezelfde inhoud naar een tweede model en
-  aanbieder; beide zijn instellingen van de gebruiker en de voorfilter staat
-  standaard uit.
+  aanbieder; beide zijn instellingen van de gebruiker. De voorfilter staat
+  standaard uit, de uitwijk standaard aan (uit te zetten bij *Routing*).
 - **Bronnen:** alleen hosts die de gebruiker toevoegt, plus `open.overheid.nl`
   en `zoek.officielebekendmakingen.nl`. Er worden geen host-permissies vooraf
   gevraagd (zie *Permissiemodel*).

@@ -1,10 +1,10 @@
 # Privacybeleid Signaleringen
 
-*Versie 1 · [datum invullen]*
+*Versie 1 · 28 oktober 2026*
 
 Signaleringen is een browserextensie die publicaties uit bronnen volgt die u zelf kiest, door een taalmodel laat beoordelen en per profiel bundelt tot één signalering.
 
-**Uitgever:** [naam uitgever invullen, bijv. FDLE] · **Contact:** [e-mailadres invullen]
+**Uitgever:** FDLE, Struweelstraat 1, Zwolle · KvK 42152907 · [fdle.eu](https://fdle.eu) · **Contact:** [vollebergh@fdle.eu](mailto:vollebergh@fdle.eu)
 
 ## In het kort
 
@@ -36,7 +36,7 @@ Bij een scan stuurt de extensie per publicatie:
 
 **Wie waarvoor verantwoordelijk is.** De uitgever sluit geen overeenkomst met modelaanbieders namens u en heeft geen inzage in wat zij met uw gegevens doen. Voor de verwerking gelden de voorwaarden van het endpoint en van de aanbieder die u zelf kiest. Controleer vóór gebruik of die aanbieder uw invoer niet bewaart en er niet mee traint. Bij OpenRouter kunt u in uw account (*Privacy*) instellen dat alleen aanbieders met *zero data retention* of zonder training worden gebruikt; dat geldt dan ook voor uw scans.
 
-**Uitwijk.** Als u bij *Routing* een uitwijkmodel instelt en aanzet, gaat dezelfde inhoud na herhaalde fouten naar dat tweede model en die tweede aanbieder. Het is uw instelling en uw keuze van aanbieder.
+**Uitwijk (standaard aan).** Blijft het eerste model na herhaalde pogingen tijdelijk onbereikbaar, dan gaat dezelfde inhoud naar het uitwijkmodel en de aanbieder die bij *Routing* staan. Die uitwijk staat standaard aan met een vooringesteld model; u kunt model en aanbieder wijzigen of de uitwijk uitzetten. Ook hiervoor geldt: controleer het databeleid van die aanbieder.
 
 **Voorfilter (optioneel, standaard uit).** Zet u *Voorfilter* aan, dan gaan titel, tekstfragment (max. 1.000 tekens), bronnaam en uw vraag (max. 500 tekens) naar het decisions-endpoint en het beslismodel dat u daar instelt. Zonder dit vinkje gebeurt dat niet.
 
@@ -50,9 +50,13 @@ Alleen hosts die u zelf als bron of proxy toevoegt, plus `open.overheid.nl` en, 
 
 De extensie gebruikt geen analytics, geen advertenties en geen externe scripts, verkoopt of deelt geen gegevens en gebruikt gegevens niet voor andere doelen dan hierboven beschreven.
 
+## Als u contact opneemt
+
+Mailt u de uitgever, dan gebruikt FDLE uw naam, e-mailadres en de inhoud van uw bericht alleen om uw vraag te beantwoorden (grondslag: gerechtvaardigd belang). De correspondentie wordt verwijderd zodra uw vraag is afgehandeld, uiterlijk een jaar daarna, en niet met anderen gedeeld.
+
 ## Uw rechten
 
-De uitgever heeft geen persoonsgegevens van u; u kunt uw gegevens zelf inzien, exporteren en wissen in de extensie. Voor de verwerking bij het endpoint en de modelaanbieder die u kiest, wendt u zich tot die partijen.
+Via de extensie ontvangt de uitgever geen persoonsgegevens van u; u kunt uw gegevens zelf inzien, exporteren en wissen in de extensie. Over gegevens uit contact met de uitgever kunt u inzage, correctie of verwijdering vragen via het contactadres hierboven. Voor de verwerking bij het endpoint en de modelaanbieder die u kiest, wendt u zich tot die partijen. U kunt ook een klacht indienen bij de [Autoriteit Persoonsgegevens](https://autoriteitpersoonsgegevens.nl).
 
 ## Wijzigingen
 
