@@ -54,8 +54,6 @@ test('Chromium-manifest zonder Firefox-sleutels', () => {
   assert.equal(m.sidebar_action, undefined);
   assert.equal(m.browser_specific_settings, undefined);
   assert.ok(m.background.service_worker);
-  assert.ok(m.side_panel);
-  assert.ok(m.permissions.includes('sidePanel'));
   assert.equal(m.version, manifest.version);
 });
 
@@ -66,8 +64,20 @@ test('Firefox-manifest zonder Chromium-sleutels', () => {
   assert.equal(m.minimum_chrome_version, undefined);
   assert.equal(m.permissions.includes('sidePanel'), false);
   assert.ok(m.background.scripts.length);
-  assert.ok(m.sidebar_action);
   assert.ok(m.browser_specific_settings.gecko.id);
+});
+
+test('zijpaneel verborgen: niet in het manifest, wel terug te zetten', () => {
+  // AppConfig.SIDE_PANEL_ENABLED staat uit; dan ook geen side_panel,
+  // sidebar_action of sidePanel-permissie, anders biedt de browser het toch aan.
+  assert.equal(manifest.side_panel, undefined);
+  assert.equal(manifest.sidebar_action, undefined);
+  assert.equal(manifest.permissions.includes('sidePanel'), false);
+  // Met de sleutels terug haalt manifestFor ze per browser nog steeds goed weg.
+  const full = { ...manifest, side_panel: { default_path: 'x.html' }, sidebar_action: { default_panel: 'x.html' }, permissions: [...manifest.permissions, 'sidePanel'] };
+  assert.equal(manifestFor('chromium', full).sidebar_action, undefined);
+  assert.equal(manifestFor('firefox', full).side_panel, undefined);
+  assert.equal(manifestFor('firefox', full).permissions.includes('sidePanel'), false);
 });
 
 test('gedeeld manifest blijft ongewijzigd', () => {

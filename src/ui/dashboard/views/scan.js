@@ -31,8 +31,9 @@ export async function renderScan(profileId, scanId) {
 
   if (!results) throw new Error('Scan niet gevonden');
 
-  const { scan, relevant, possible = [], filtered, synthesis } = results;
+  const { scan, relevant, possible = [], filtered, unjudged = [], synthesis } = results;
   const root = el('div');
+  const reader = Boolean(scan.readerMode);
 
   // Element.append() maakt van null de tekst "null"; daarom eerst filteren.
   root.append(
@@ -53,12 +54,17 @@ export async function renderScan(profileId, scanId) {
         scan.lookbackDays
           ? el('span', { class: 'badge', title: 'Terugkijktijd van het profiel bij deze scan', text: `${scan.lookbackDays} dagen terug` })
           : null,
-        el('span', { class: 'badge', text: `${scan.newCount ?? 0} nieuw` }),
-        el('span', { class: 'badge ok', text: `${relevant.length} relevant` }),
-        possible.length > 0 ? el('span', { class: 'badge', text: `${possible.length} mogelijk` }) : null,
-        el('span', { class: 'badge', text: `${filtered.length} weggefilterd` }),
-      ]),
-      scan.onlyNewPublications
+        el('span', { class: reader ? 'badge ok' : 'badge', text: `${scan.newCount ?? 0} nieuw` }),
+        reader ? null : el('span', { class: 'badge ok', text: `${relevant.length} relevant` }),
+        !reader && possible.length > 0 ? el('span', { class: 'badge', text: `${possible.length} mogelijk` }) : null,
+        reader ? null : el('span', { class: 'badge', text: `${filtered.length} weggefilterd` }),
+      ].filter(Boolean)),
+      reader
+        ? el('p', {
+            class: 'muted',
+            text: 'Gescand zonder taalmodel: de publicaties zijn opgehaald, niet beoordeeld, en er is geen signalering. Stel bij Instellingen een taalmodel in; de eerste scan daarna beoordeelt ook wat hier al stond, zolang het nog in de bron staat.',
+          })
+        : scan.onlyNewPublications
         ? el('p', {
             class: 'muted',
             text: `Beoordeeld: alleen de ${scan.evaluatedCount ?? 0} publicatie(s) die dit profiel nog niet eerder ophaalde. De rest was al bekend.`,
@@ -78,6 +84,17 @@ export async function renderScan(profileId, scanId) {
       sourceStatusSection(scan.sourceStatuses ?? []),
     ].filter(Boolean),
   );
+
+  // ── Leesmodus (B-82): alleen de lijst ─────────────────────────────────────
+  if (reader) {
+    root.append(el('h3', { class: 'section-title', text: `Publicaties (${unjudged.length})` }));
+    if (unjudged.length === 0) {
+      root.append(el('p', { class: 'muted', text: 'Geen publicaties gevonden binnen de terugkijktijd.' }));
+    } else {
+      unjudged.forEach((result) => root.append(resultRow(result)));
+    }
+    return root;
+  }
 
   // ── Signalering ───────────────────────────────────────────────────────────
   root.append(el('h3', { class: 'section-title', text: 'Signalering' }));

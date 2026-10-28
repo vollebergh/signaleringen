@@ -90,20 +90,18 @@ export async function runDueScans() {
   const settings = await getSettings();
   if (!settings.autoScanEnabled) return { ran: 0, skipped: 'disabled' };
 
-  if (!(await isConfigured(settings))) {
-    log.warn('Automatische synthese overgeslagen: nog geen API-key of proxy ingesteld');
-    return { ran: 0, skipped: 'not-configured' };
-  }
-
-  // Dezelfde regel als de scan zelf (CR-18): alleen een vergrendelde vault
-  // waarvan de key nodig is, houdt de planner tegen. Een lokaal model heeft
-  // geen key nodig (B-67).
-  try {
-    await withApiKey(settings);
-  } catch (err) {
-    if (!(err instanceof VaultLockedError)) throw err;
-    log.warn('Automatische synthese overgeslagen: de vault is vergrendeld (bijv. na een herstart van de browser)');
-    return { ran: 0, skipped: 'locked' };
+  // Zonder taalmodel scant de planner gewoon, in leesmodus (B-82): ophalen
+  // zonder beoordeling. Met een taalmodel geldt dezelfde regel als de scan
+  // zelf (CR-18): alleen een vergrendelde vault waarvan de key nodig is, houdt
+  // de planner tegen. Een lokaal model heeft geen key nodig (B-67).
+  if (await isConfigured(settings)) {
+    try {
+      await withApiKey(settings);
+    } catch (err) {
+      if (!(err instanceof VaultLockedError)) throw err;
+      log.warn('Automatische synthese overgeslagen: de vault is vergrendeld (bijv. na een herstart van de browser)');
+      return { ran: 0, skipped: 'locked' };
+    }
   }
 
   const profiles = await loadProfiles();

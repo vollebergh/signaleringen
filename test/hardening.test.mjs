@@ -225,7 +225,7 @@ test('buildEntryRecords: scans en publicaties krijgen altijd nieuwe id\'s, verwi
 // ── S-10: voorfilter-key ───────────────────────────────────────────────────
 
 test('prefilterConnection: de key van het taalmodel alleen naar dezelfde host', () => {
-  const base = { ...DefaultSettings, directApiKey: 'sk-or', jevPrefilterEnabled: true };
+  const base = { ...DefaultSettings, directApiKey: 'sk-or', jevPrefilterEnabled: true, prefilterEndpoint: 'https://openrouter.ai/api/alpha/decisions' };
   assert.equal(prefilterConnection(base).key, 'sk-or', 'standaard: openrouter.ai bij beide');
   assert.equal(prefilterConnection({ ...base, prefilterEndpoint: 'https://ander.example/decisions' }).key, '');
   assert.equal(

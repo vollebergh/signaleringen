@@ -207,7 +207,9 @@ function profileCard(profile) {
 
       status.append(
         el('span', {
-          text: `${latest.relevant.length} relevant van ${latest.scan.totalFetched} · ${formatDateTime(latest.scan.scanDate)} · `,
+          text: latest.scan.readerMode
+            ? `${latest.scan.newCount ?? 0} nieuw van ${latest.scan.totalFetched} · ${formatDateTime(latest.scan.scanDate)} · `
+            : `${latest.relevant.length} relevant van ${latest.scan.totalFetched} · ${formatDateTime(latest.scan.scanDate)} · `,
         }),
         el('button', {
           class: 'icon',

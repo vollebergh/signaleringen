@@ -6,6 +6,7 @@
 
 import { Msg, send } from '../../core/messages.js';
 import { log } from '../../core/logger.js';
+import { AppConfig } from '../../core/config.js';
 import { $, el, clear, applyTheme, formatDateTime, showError, progressLabel, showProgress, dashboardUrl } from '../shared/dom.js';
 import { runScanInStatus, showInterrupted } from '../shared/scan-control.js';
 
@@ -37,7 +38,9 @@ async function init() {
     window.close();
   });
 
-  $('#open-panel').addEventListener('click', () => {
+  // Zijpaneel verborgen (AppConfig.SIDE_PANEL_ENABLED): knop weg.
+  if (!AppConfig.SIDE_PANEL_ENABLED) $('#open-panel').remove();
+  else $('#open-panel').addEventListener('click', () => {
     // Firefox kent geen side panel maar een sidebar (B-65). Beide eisen een
     // gebruikersgebaar, dus geen `await` vóór de aanroep.
     const sidebar = globalThis.browser?.sidebarAction;
@@ -68,19 +71,17 @@ async function render() {
     clear(content);
     statusNodes.clear();
 
+    // Zonder taalmodel werkt de extensie als gewone feedlezer (B-82): scannen
+    // haalt op, zonder beoordeling of signalering. Een melding, geen blokkade.
     if (!configured) {
       content.append(
         el('div', { class: 'card' }, [
-          el('p', { text: 'Nog niet geconfigureerd.' }),
+          el('p', { text: 'Geen taalmodel ingesteld.' }),
           el('p', {
             class: 'muted',
-            text:
-              settings.transport === 'proxy'
-                ? 'Stel het proxy-adres in voordat je kunt scannen.'
-                : 'Stel een API-key en base-URL in voordat je kunt scannen.',
+            text: 'Een scan haalt nu alleen de nieuwste publicaties op. Stel een taalmodel in voor beoordeling en signaleringen.',
           }),
           el('button', {
-            class: 'primary',
             text: 'Naar instellingen',
             onclick: () => {
               chrome.runtime.openOptionsPage();
@@ -89,7 +90,6 @@ async function render() {
           }),
         ]),
       );
-      return;
     }
 
     if (settings.transport === 'direct' && vault.exists && !vault.unlocked) {
@@ -173,7 +173,7 @@ async function profileCard(profile, isUnread) {
     ]);
 
     if (latest) {
-      status.textContent = `${latest.relevant.length} relevant · ${formatDateTime(
+      status.textContent = `${latest.scan.readerMode ? `${latest.scan.newCount ?? 0} nieuw` : `${latest.relevant.length} relevant`} · ${formatDateTime(
         latest.scan.scanDate,
       )}`;
     } else {

@@ -12,6 +12,13 @@ import { Store, getAllByIndex, getByKey, transaction } from './db.js';
 import { log } from '../core/logger.js';
 
 /** Recordvorm → domeinvorm (0/1 wordt true/false). */
+/** Nieuw eerst, daarna de nieuwste publicatie eerst. */
+const newestFirst = (a, b) =>
+  Number(b.isNew) - Number(a.isNew) || (b.publication?.publishedDate ?? 0) - (a.publication?.publishedDate ?? 0);
+
+/** `relevance` van een publicatie uit een scan zonder taalmodel (B-82). */
+export const UNJUDGED = 'unjudged';
+
 function toResult(record) {
   return {
     ...record,
@@ -90,7 +97,9 @@ export async function getScanResults(scanId) {
     scan,
     relevant: publications.filter((p) => p.isRelevant),
     possible: publications.filter((p) => !p.isRelevant && p.relevance === 'mogelijk'),
-    filtered: publications.filter((p) => !p.isRelevant && p.relevance !== 'mogelijk'),
+    filtered: publications.filter((p) => !p.isRelevant && p.relevance !== 'mogelijk' && p.relevance !== UNJUDGED),
+    // Leesmodus zonder taalmodel (B-82): opgehaald, niet beoordeeld.
+    unjudged: publications.filter((p) => p.relevance === UNJUDGED).sort(newestFirst),
     synthesis: synthesis ?? null,
   };
 }

@@ -75,6 +75,29 @@ export const AppConfig = {
   LLM_REASONING_EFFORT: 'none',
 
   /**
+   * Andere aanbieders dan OpenRouter (B-79). Bij de Claude API en de
+   * redeneermodellen van OpenAI is denken niet uit te zetten en tellen de
+   * denktokens mee in de tokenlimiet; zonder ruimte erbij komt er dan een leeg
+   * of afgekapt antwoord. Ongebruikte ruimte kost niets.
+   */
+  /**
+   * Zijpaneel (side panel / Firefox-sidebar) tonen? Verborgen sinds 0.24.0 op
+   * verzoek van de gebruiker, niet verwijderd: de code in ui/sidepanel/ blijft.
+   * Weer aanzetten: zet dit op true en zet in manifest.json `side_panel`, de
+   * permissie `sidePanel` en `sidebar_action` terug (zie DEVELOPMENT.md).
+   */
+  SIDE_PANEL_ENABLED: false,
+
+  /** Lengte van de omschrijving per publicatie in een scan zonder taalmodel (B-82). */
+  READER_DESCRIPTION_MAX_CHARS: 280,
+
+  LLM_THINKING_HEADROOM_TOKENS: 8_000,
+  /** Inspanning bij de Claude API: laag, de taken zijn eenvoudig (beoordelen, samenvatten). */
+  ANTHROPIC_EFFORT: 'low',
+  /** Versie van de Claude API (header `anthropic-version`). */
+  ANTHROPIC_API_VERSION: '2026-10-21',
+
+  /**
    * Lengtegrenzen per publicatie in de prompt (B-44). Houdt één bron met een
    * lange lap tekst — al dan niet met ingebedde instructies — in toom. De
    * synthese krijgt iets meer ruimte dan het filter, omdat zij de inhoud moet
@@ -297,12 +320,15 @@ export const DefaultSettings = {
 
   /**
    * Uitwijkroute (B-D11): als de primaire route na alle pogingen tijdelijk
-   * blijft weigeren (429/5xx). Zichtbaar en uit te zetten bij Instellingen,
-   * dus geen stille modelwissel.
+   * blijft weigeren (429/5xx). Sinds 0.24.0 optioneel en standaard uit, zonder
+   * vooringevuld model: een uitwijk zonder ingestelde key of bij een andere
+   * aanbieder dan OpenRouter heeft geen zin. Het instellingenscherm toont de
+   * vroegere waarden (deepseek/deepseek-v4.1-flash bij decart/fp4) als
+   * voorbeeld.
    */
-  fallbackEnabled: true,
-  fallbackModel: 'deepseek/deepseek-v4.1-flash',
-  fallbackProviderRouting: 'decart/fp4',
+  fallbackEnabled: false,
+  fallbackModel: '',
+  fallbackProviderRouting: '',
 
   theme: 'system', // 'system' | 'light' | 'dark'
 
@@ -333,13 +359,15 @@ export const DefaultSettings = {
    * Lege key: dezelfde key als het taalmodel (`directApiKey`). Met een eigen
    * key werkt de voorfilter ook in de proxy-route.
    *
-   * Het model staat op een vaste versie, niet op `~typesafe/jev-latest`: de
-   * drempel (`JEV_PREFILTER_THRESHOLD`) is op Jev 1.13 gemeten, en een nieuwe
-   * versie mag die niet ongemerkt verschuiven. Verdwijnt de versie, dan geeft
-   * de voorfilter een fout en gaat alles naar het taalmodel.
+   * Sinds 0.24.0 niets vooringevuld: de gebruiker vult endpoint, model,
+   * aanbieder en eventueel key zelf in. Het instellingenscherm toont OpenRouter
+   * en Jev als voorbeeld. De drempel (`JEV_PREFILTER_THRESHOLD`) is op Jev 1.13
+   * gemeten; een vaste versie (typesafe/jev-1.13-20260917) houdt die stabiel.
+   * Verdwijnt het model, dan geeft de voorfilter een fout en gaat alles naar
+   * het taalmodel.
    */
-  prefilterEndpoint: 'https://openrouter.ai/api/alpha/decisions',
+  prefilterEndpoint: '',
   prefilterApiKey: '',
-  prefilterModel: 'typesafe/jev-1.13-20260917',
-  prefilterProviderRouting: 'typesafe',
+  prefilterModel: '',
+  prefilterProviderRouting: '',
 };

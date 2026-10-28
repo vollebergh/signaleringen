@@ -54,10 +54,11 @@ export async function runScanInStatus({ profileId, button, status, initialLabel,
   const retry = () => runScanInStatus({ profileId, button, status, resultText, openResult, progress });
 
   try {
-    const { scanId, relevantCount } = await send(Msg.START_SCAN, { profileId });
+    const { scanId, relevantCount, newCount, readerMode } = await send(Msg.START_SCAN, { profileId });
     clear(status);
     status.append(
-      el('span', { text: `${relevantCount} relevant · ` }),
+      // Zonder taalmodel (B-82) is er niets beoordeeld: dan het aantal nieuwe.
+      el('span', { text: readerMode ? `${newCount} nieuw · ` : `${relevantCount} relevant · ` }),
       el('button', { class: 'icon', text: resultText, onclick: () => openResult(scanId) }),
     );
   } catch (err) {

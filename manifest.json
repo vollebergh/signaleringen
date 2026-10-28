@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Signaleringen",
-  "version": "0.23.2",
+  "version": "0.24.0",
   "description": "Volgt RSS-feeds, webpagina's en open.overheid.nl per profiel en bundelt relevante publicaties tot één signalering per onderwerp.",
   "minimum_chrome_version": "121",
 
@@ -25,17 +25,6 @@
 
   "options_page": "src/ui/dashboard/dashboard.html",
 
-  "side_panel": {
-    "default_path": "src/ui/sidepanel/sidepanel.html"
-  },
-
-  "sidebar_action": {
-    "default_panel": "src/ui/sidepanel/sidepanel.html",
-    "default_title": "Signaleringen",
-    "default_icon": "icons/icon-32.png",
-    "open_at_install": false
-  },
-
   "browser_specific_settings": {
     "gecko": {
       "id": "signaleringen@vollebergh",
@@ -45,8 +34,7 @@
 
   "permissions": [
     "storage",
-    "contextMenus",
-    "sidePanel"
+    "contextMenus"
   ],
 
   "optional_permissions": [

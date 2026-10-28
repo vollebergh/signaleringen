@@ -15,15 +15,14 @@ Na een codewijziging: **Opnieuw laden** op de extensiekaart. De service worker
 inspecteer je via de link *service worker* op diezelfde kaart.
 
 **Chrome** werkt op dezelfde manier via `chrome://extensions` (Chrome 121 of
-nieuwer). Edge en Chrome melden dat ze `sidebar_action` en
-`browser_specific_settings` niet kennen; die sleutels zijn voor Firefox en
-kunnen geen kwaad.
+nieuwer). Edge en Chrome melden dat ze `browser_specific_settings` niet
+kennen; die sleutel is voor Firefox en kan geen kwaad.
 
 **Firefox** (128 of nieuwer): `about:debugging#/runtime/this-firefox` →
 **Tijdelijke add-on laden** → kies `manifest.json`. Een tijdelijke add-on
 verdwijnt bij het afsluiten van Firefox. Verschillen met Edge:
 
-- Het zijpaneel heet in Firefox de *sidebar*. De knop in de popup opent die.
+- Het zijpaneel heet in Firefox de *sidebar* (nu verborgen, zie *Zijpaneel*).
 - Firefox staat `alarms` niet toe als optionele permissie. Automatisch
   synthetiseren is daar daarom niet beschikbaar; Instellingen meldt dat.
 - Host-toestemming vraag je net als in Edge per bron; Firefox toont daarvoor
@@ -36,8 +35,9 @@ verdwijnt bij het afsluiten van Firefox. Verschillen met Edge:
    OpenRouter-key en sla op. Voor `openrouter.ai` is geen host-toestemming
    nodig: de API staat verzoeken vanuit de browser toe (CORS).
 3. **Model** en **Routing** staan vooringevuld: `deepseek/deepseek-v4-flash-0731`
-   bij `deepinfra`, met als uitwijk `deepseek/deepseek-v4.1-flash` bij
-   `decart/fp4` (gelijk aan de preset `@preset/signaleringen`). Routing vul je
+   bij `deepinfra`. De uitwijk is sinds 0.24.0 optioneel en staat uit; de
+   vroegere waarden (`deepseek/deepseek-v4.1-flash` bij `decart/fp4`, samen
+   gelijk aan de preset `@preset/signaleringen`) staan als voorbeeld in de velden. Routing vul je
    in als `provider` of `provider/kwantisatie`, in volgorde van voorkeur,
    komma-gescheiden — dezelfde tags als op de endpoints-pagina van een model
    bij OpenRouter. Een preset als model kan ook; dan geldt het routingveld niet.
@@ -176,7 +176,11 @@ Vaste permissies en waarom ze nodig zijn:
 | --- | --- |
 | `storage` | Profielen, instellingen en scangeschiedenis |
 | `contextMenus` | "Deze pagina toevoegen als bron" |
-| `sidePanel` | Signalering naast de pagina lezen |
+
+`sidePanel` staat er sinds 0.24.0 niet meer in: het zijpaneel is verborgen
+(zie *Zijpaneel*). Elke Base-URL buiten openrouter.ai (Claude API, OpenAI,
+een ander endpoint, een lokaal model) krijgt bij *Opslaan* een
+toestemmingsvraag voor die host.
 
 Optioneel, pas gevraagd bij het aanzetten van de betreffende functie:
 
@@ -239,11 +243,11 @@ werkt hij alleen met een eigen key in het voorfilterveld.
 **Opnieuw proberen en uitwijken.** Bij een 429, 5xx of time-out probeert de
 extensie elke aanroep tot 3 keer opnieuw (2 s, verdubbelend, maximaal 30 s;
 `Retry-After` gaat voor). Blijft de primaire route weigeren, dan wijkt ze uit
-naar `deepseek/deepseek-v4.1-flash` bij Decart in fp4
-(`{"order":["decart/fp4"],"allow_fallbacks":false}`), ook
-weer tot 3 keer. Model en provider-routing van de uitwijkroute staan
-bij **Instellingen → Routing** en de uitwijk is daar uit te zetten; standaard
-zoals hierboven (`fallback*` in `DefaultSettings`).
+naar de uitwijkroute bij **Instellingen → Routing**, ook weer tot 3 keer.
+Sinds 0.24.0 staat de uitwijk standaard uit en zijn model en routing leeg
+(`fallback*` in `DefaultSettings`); het voorbeeld in de velden is
+`deepseek/deepseek-v4.1-flash` bij `decart/fp4`. De uitwijk werkt alleen bij
+OpenRouter (`routesFor`).
 
 Let op: dit is **geen remote code**. Het Edge-beleid verbiedt het laden en
 uitvoeren van extern gehost script; JSON van een API ophalen is gewoon data en
@@ -388,20 +392,22 @@ signalering, maar staan apart om zelf na te kijken. Drempels in
 
 Bij **Instellingen → Voorfilter** staat één vinkje, standaard uit. Aan legt de
 extensie de te beoordelen publicaties eerst voor aan een beslismodel —
-standaard Jev van TypeSafe via OpenRouters decisions-endpoint. Dat geeft per
+bijvoorbeeld Jev van TypeSafe via OpenRouters decisions-endpoint. Dat geeft per
 publicatie een kans dat ze over de gebruikersvraag gaat; wat onder 0,10 valt
 (`AppConfig.JEV_PREFILTER_THRESHOLD`, 10 op 100) gaat niet meer naar het
 taalmodel.
 
-Met het vinkje aan verschijnen vier velden, zodat een gebruiker zijn eigen
-key en model kiest:
+Met het vinkje aan verschijnen vier velden. Sinds 0.24.0 is niets
+vooringevuld; de velden tonen een voorbeeld (placeholder). Zonder endpoint,
+model en key slaat de extensie de voorfilter over, en *Opslaan* meldt welke
+velden ontbreken (`validateRouting`).
 
-| Veld | Standaard | Toelichting |
+| Veld | Voorbeeld | Toelichting |
 | --- | --- | --- |
 | Endpoint | `https://openrouter.ai/api/alpha/decisions` | Een decisions-endpoint; een chatmodel werkt hier niet |
-| API-key | leeg | Leeg: de key van het taalmodel. Eigen key: aparte uitgavenlimiet, en nodig via een proxy. Gaat mee in de vault |
-| Model | `typesafe/jev-1.13-20260917` | Vaste versie: de drempel is op 1.13 afgesteld |
-| Provider-routing | `typesafe` | Zelfde vorm als bij het taalmodel |
+| API-key | leeg | Leeg: de key van het taalmodel, alleen bij dezelfde host. Eigen key: aparte uitgavenlimiet, en nodig via een proxy of een andere aanbieder. Gaat mee in de vault |
+| Model | `~typesafe/jev-latest` | Een vaste versie (`typesafe/jev-1.13-20260917`) is stabieler: de drempel is op 1.13 afgesteld |
+| Aanbieder (provider-routing) | `typesafe` | Zelfde vorm als bij het taalmodel |
 
 *Voorfilter testen* slaat op en stelt één testvraag; het toont model en
 provider die antwoordden.
@@ -477,6 +483,75 @@ werkte, maar duurde ruim 4 minuten en gaf matige kwaliteit: geregeld
 onleesbare JSON (de extensie probeert het dan opnieuw), te lage scores voor
 relevante berichten en een signalering zonder bronverwijzingen. Kies voor
 serieus gebruik een groter model op een machine met GPU.
+
+## Leesmodus zonder taalmodel (B-82)
+
+Is er geen taalmodel ingesteld (`isConfigured` onwaar: geen key, geen lokaal
+model, geen proxy-adres), dan stopt een scan niet meer maar draait hij in
+leesmodus (`loadProfileAndSettings(…, { allowReaderMode: true })` →
+`finishReaderScan` in `background/scan-runner.js`):
+
+- ophalen, ontdubbelen en `refreshSeen` zoals altijd; geen vraag bij een
+  grote scan, geen volledige tekst, geen voorfilter, beoordeling of synthese;
+- alle opgehaalde publicaties worden opgeslagen met `relevance: 'unjudged'`
+  (`UNJUDGED` in `data/scan-repository.js`), `score: null` en als
+  `shortDescription` het begin van de omschrijving
+  (`READER_DESCRIPTION_MAX_CHARS`); de scan krijgt `readerMode: true`;
+- `getScanResults` geeft ze als `unjudged`, nieuw eerst en dan op datum;
+- nieuwe publicaties worden vastgelegd als gezien mét `unjudged: true` op het
+  seen-record. Records zonder dat veld (alles van vóór B-82) gelden als
+  beoordeeld.
+
+**Daarna een taalmodel:** met *Alleen nieuwe publicaties beoordelen* gaat
+ook naar het model wat nog in een bron staat en `unjudged` is; na het
+beoordelen haalt `markJudged` de markering weg. Zo verdwijnt niets
+ongezien, en wordt niets twee keer beoordeeld. Wat al uit de bron verdwenen
+is, wordt niet meer beoordeeld.
+
+*Signalering opstellen* (`synthesizeScan`) blijft een taalmodel eisen. De
+planner scant zonder taalmodel ook, in leesmodus; een vergrendelde vault
+houdt hem alleen tegen als er wél een taalmodel is. De popup toont zonder
+taalmodel een melding in plaats van een blokkade. Tests: *leesmodus* en
+*planner: zonder taalmodel* in `test/scan.test.mjs`.
+
+## Aanbieders en endpoints
+
+Welke velden een verzoek krijgt, volgt uit de Base-URL (`core/api-kind.js`,
+B-79); de keuze *Aanbieder* in Instellingen vult alleen de Base-URL in.
+
+| Soort | Herkend aan | Verzoek |
+| --- | --- | --- |
+| `openrouter` | `openrouter.ai`, of de proxy-route | `chat/completions` met `provider`, `reasoning`, `temperature`, `max_tokens`; presets en uitwijk |
+| `anthropic` | `api.anthropic.com` | Messages API (`/messages`), headers `x-api-key`, `anthropic-version` (`AppConfig.ANTHROPIC_API_VERSION`) en `anthropic-dangerous-direct-browser-access`; systeemprompt los; geen `temperature` (geweigerd sinds API-versie 2026-10-21); `output_config.effort` (`ANTHROPIC_EFFORT`); antwoord uit de `text`-blokken |
+| `openai` | `api.openai.com` | `chat/completions` met `max_completion_tokens`, zonder `temperature` (redeneermodellen weigeren een andere waarde) |
+| `local` | localhost, privé-adres, Tailscale, `.local` | `chat/completions` met `temperature` en `max_tokens`, zonder key; batches van 10 |
+| `other` | elke andere https-host | als `local`, met `Authorization: Bearer` |
+
+Bij `anthropic` en `openai` komt er `LLM_THINKING_HEADROOM_TOKENS` bij de
+tokenlimiet: denken is daar niet uit te zetten en telt mee. Provider-routing,
+presets en de uitwijkroute gelden alleen bij `openrouter`; het
+instellingenscherm verbergt ze daarbuiten. Een abonnement (Claude Pro/Max,
+ChatGPT Plus) geeft geen API-toegang; de gebruiker heeft een API-key nodig.
+Getest met nagebootste antwoorden (`test/providers.test.mjs`), nog niet met
+een echte key bij Anthropic of OpenAI.
+
+## Zijpaneel (verborgen)
+
+Sinds 0.24.0 verborgen, niet verwijderd. `AppConfig.SIDE_PANEL_ENABLED` staat
+op `false` (de popup toont dan geen knop *Paneel*), en `side_panel`,
+`sidebar_action` en de permissie `sidePanel` staan niet in `manifest.json`,
+zodat Edge het zijpaneel ook zelf niet aanbiedt. De code in `src/ui/sidepanel/`
+blijft en gaat mee in het pakket. Weer aanzetten:
+
+1. `SIDE_PANEL_ENABLED: true` in `src/core/config.js`;
+2. in `manifest.json` terugzetten:
+   `"side_panel": { "default_path": "src/ui/sidepanel/sidepanel.html" }`,
+   `"sidebar_action": { "default_panel": "src/ui/sidepanel/sidepanel.html", "default_title": "Signaleringen", "default_icon": "icons/icon-32.png", "open_at_install": false }`
+   en `"sidePanel"` bij `permissions`;
+3. de test *zijpaneel verborgen* in `test/package.test.mjs` omdraaien.
+
+Het inpakscript haalt `side_panel` en `sidebar_action` per browser al weg waar
+ze niet horen.
 
 ## Exporteren en importeren
 

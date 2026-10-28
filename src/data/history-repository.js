@@ -78,6 +78,9 @@ export async function recordSeen(profileId, scanId, entries, existing = null) {
       firstScanId: scanId,
       synthesisScanId: null,
       synthesisAt: null,
+      // Opgehaald in een scan zonder taalmodel (leesmodus, B-82): gezien,
+      // maar nog niet beoordeeld. Records zonder dit veld zijn beoordeeld.
+      ...(entry.unjudged ? { unjudged: true } : {}),
     }));
 
   if (records.length === 0) return;
@@ -85,6 +88,20 @@ export async function recordSeen(profileId, scanId, entries, existing = null) {
     records.forEach((record) => store.put(record));
   });
   log.debug(`${records.length} nieuwe publicatie(s) vastgelegd voor profiel ${profileId}`);
+}
+
+/**
+ * Haalt de markering "nog niet beoordeeld" weg (B-82): het model heeft deze
+ * publicaties nu beoordeeld.
+ * @param {object[]} records seen-records met `unjudged: true`
+ */
+export async function markJudged(records) {
+  const pending = records.filter((record) => record?.unjudged);
+  if (pending.length === 0) return 0;
+  await transaction(Store.SEEN, 'readwrite', (store) => {
+    pending.forEach(({ unjudged, ...record }) => store.put(record));
+  });
+  return pending.length;
 }
 
 /**

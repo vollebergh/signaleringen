@@ -12,6 +12,7 @@
 
 import { AppConfig } from '../core/config.js';
 import { isLocalBaseUrl } from '../core/models.js';
+import { ApiKind, apiKind, supportsOpenRouterFeatures } from '../core/api-kind.js';
 import { log } from '../core/logger.js';
 import { connectionErrors, parseList } from '../core/routing.js';
 import { fetchBytes, utf8, isTransientStatus } from './http.js';
@@ -43,8 +44,18 @@ function resolveEndpoint(settings) {
 
   const base = settings.directBaseUrl.trim().replace(/\/+$/, '');
   const headers = { 'Content-Type': 'application/json' };
-  // Een lokaal model draait zonder key (B-67); dan geen lege Bearer meesturen.
   const key = settings.directApiKey?.trim();
+
+  // De Claude API heeft een eigen route en eigen headers (B-79). De laatste
+  // header is nodig omdat het verzoek uit een browser(extensie) komt.
+  if (apiKind(settings) === ApiKind.ANTHROPIC) {
+    if (key) headers['x-api-key'] = key;
+    headers['anthropic-version'] = AppConfig.ANTHROPIC_API_VERSION;
+    headers['anthropic-dangerous-direct-browser-access'] = 'true';
+    return { url: `${base}/messages`, headers };
+  }
+
+  // Een lokaal model draait zonder key (B-67); dan geen lege Bearer meesturen.
   if (key) headers.Authorization = `Bearer ${key}`;
   return { url: `${base}/chat/completions`, headers };
 }
@@ -122,9 +133,9 @@ export function providerRouting(routing) {
  * staat de uitwijkroute. Geëxporteerd voor de tests.
  */
 export function routesFor(settings) {
-  // Lokaal model (B-67): geen OpenRouter-routing en geen uitwijkroute — die
-  // wijst naar een model dat lokaal niet bestaat.
-  if (isLocal(settings)) return [{ model: settings.model, provider: null }];
+  // Alleen OpenRouter kent provider-routing en de uitwijkroute; die wijst naar
+  // een OpenRouter-model dat elders niet bestaat (B-67, B-79).
+  if (!supportsOpenRouterFeatures(settings)) return [{ model: settings.model, provider: null }];
   const primary = {
     model: settings.model,
     provider: usesPreset(settings.model) ? null : providerRouting(settings.providerRouting),
@@ -174,8 +185,22 @@ export async function complete(settings, request) {
   throw new Error(`${lastError.message} — ook na ${tried} pogingen${via}; probeer het later nog eens`);
 }
 
-async function completeOnce(settings, route, { system, user, maxTokens, temperature }) {
-  const { url, headers } = resolveEndpoint(settings);
+/**
+ * De body van één verzoek, per soort endpoint (B-79). Geëxporteerd voor de tests.
+ */
+export function buildRequestBody(kind, route, { system, user, maxTokens, temperature }) {
+  if (kind === ApiKind.ANTHROPIC) {
+    // Messages API: systeemprompt los, geen `temperature` (geweigerd sinds API-
+    // versie 2026-10-21). Denken staat bij de huidige modellen altijd aan en
+    // telt mee in `max_tokens`: daarom ruimte erbij en een lage inspanning.
+    return {
+      model: route.model,
+      max_tokens: maxTokens + AppConfig.LLM_THINKING_HEADROOM_TOKENS,
+      system,
+      messages: [{ role: 'user', content: user }],
+      output_config: { effort: AppConfig.ANTHROPIC_EFFORT },
+    };
+  }
 
   const body = {
     model: route.model,
@@ -183,17 +208,30 @@ async function completeOnce(settings, route, { system, user, maxTokens, temperat
       { role: 'system', content: system },
       { role: 'user', content: user },
     ],
-    temperature,
-    max_tokens: maxTokens,
   };
 
-  if (route.provider) {
-    body.provider = route.provider;
+  if (kind === ApiKind.OPENAI) {
+    // Redeneermodellen van OpenAI kennen alleen `max_completion_tokens`, en
+    // weigeren een andere `temperature` dan de standaard.
+    body.max_completion_tokens = maxTokens + AppConfig.LLM_THINKING_HEADROOM_TOKENS;
+    return body;
   }
 
-  // Eén veld voor de redeneerinspanning; 'none' zet het uit. Zie AppConfig.
-  // Een OpenRouter-veld; een lokale server krijgt het niet (B-67).
-  if (!isLocal(settings)) body.reasoning = { effort: AppConfig.LLM_REASONING_EFFORT };
+  body.temperature = temperature;
+  body.max_tokens = maxTokens;
+
+  if (kind === ApiKind.OPENROUTER) {
+    if (route.provider) body.provider = route.provider;
+    // Eén veld voor de redeneerinspanning; 'none' zet het uit. Zie AppConfig.
+    body.reasoning = { effort: AppConfig.LLM_REASONING_EFFORT };
+  }
+  return body;
+}
+
+async function completeOnce(settings, route, request) {
+  const { url, headers } = resolveEndpoint(settings);
+  const kind = apiKind(settings);
+  const body = buildRequestBody(kind, route, request);
 
   const { response, text } = await post(url, headers, body, AppConfig.LLM_TIMEOUT_MS);
   if (!response.ok) {
@@ -213,6 +251,8 @@ async function completeOnce(settings, route, { system, user, maxTokens, temperat
   } catch {
     throw new Error('Antwoord van de LLM-API was geen geldige JSON');
   }
+
+  if (kind === ApiKind.ANTHROPIC) return parseAnthropicResponse(parsed, route);
 
   // OpenRouter geeft fouten soms met status 200 en een `error` in de body.
   if (parsed?.error) {
@@ -234,6 +274,29 @@ async function completeOnce(settings, route, { system, user, maxTokens, temperat
   // gevallen die in de praktijk voorkomen zijn een op redeneertokens
   // opgebrande limiet en een afgekapt antwoord.
   throw new Error(emptyContentMessage(choice, parsed));
+}
+
+/**
+ * Tekst uit een antwoord van de Claude API: de `text`-blokken achter elkaar;
+ * denkblokken tellen niet mee. Geëxporteerd voor de tests.
+ */
+export function parseAnthropicResponse(parsed, route) {
+  if (parsed?.type === 'error') {
+    throw new Error(`LLM-API: ${parsed.error?.message ?? JSON.stringify(parsed.error)}`);
+  }
+  if (parsed?.stop_reason === 'refusal') {
+    throw new Error('Het model weigerde dit verzoek (veiligheidsfilter van de aanbieder).');
+  }
+  const content = (parsed?.content ?? [])
+    .filter((block) => block?.type === 'text' && typeof block.text === 'string')
+    .map((block) => block.text)
+    .join('');
+  if (content.trim()) return { content, provider: null, model: parsed.model ?? route.model };
+  if (parsed?.stop_reason === 'max_tokens') {
+    const used = parsed?.usage?.output_tokens;
+    throw new Error(`Het antwoord werd afgekapt door de tokenlimiet${used ? ` (${used} tokens gebruikt)` : ''}.`);
+  }
+  throw new Error(`De LLM-API gaf een leeg antwoord terug (stop_reason: ${parsed?.stop_reason ?? 'onbekend'}).`);
 }
 
 /** Leest de foutmelding uit een niet-2xx antwoordtekst, of geeft de tekst zelf. */

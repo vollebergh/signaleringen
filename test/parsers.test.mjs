@@ -441,22 +441,36 @@ test('retryDelay groeit exponentieel, volgt Retry-After en blijft onder het plaf
 import { routesFor } from '../src/network/llm-transport.js';
 import { validateRouting, parseList } from '../src/core/routing.js';
 
+// Sinds 0.24.0 staat de uitwijk standaard uit en leeg; de tests zetten de
+// vroegere waarden zelf.
+const WithFallback = {
+  ...DefaultSettings,
+  fallbackEnabled: true,
+  fallbackModel: 'deepseek/deepseek-v4.1-flash',
+  fallbackProviderRouting: 'decart/fp4',
+};
+
+test('routesFor: standaard alleen de primaire route; de uitwijk is optioneel', () => {
+  assert.equal(DefaultSettings.fallbackEnabled, false);
+  assert.equal(routesFor(DefaultSettings).length, 1);
+});
+
 test('routesFor: standaard model bij DeepInfra met uitwijk naar decart/fp4; preset zonder provider-blok', () => {
-  const standard = routesFor(DefaultSettings);
+  const standard = routesFor(WithFallback);
   assert.equal(standard.length, 2);
   assert.equal(standard[0].model, 'deepseek/deepseek-v4-flash-0731');
   assert.deepEqual(standard[0].provider, { order: ['deepinfra'], allow_fallbacks: false });
   assert.equal(standard[1].model, 'deepseek/deepseek-v4.1-flash');
   assert.deepEqual(standard[1].provider, { order: ['decart/fp4'], allow_fallbacks: false });
 
-  const preset = routesFor({ ...DefaultSettings, model: '@preset/signaleringen' });
+  const preset = routesFor({ ...WithFallback, model: '@preset/signaleringen' });
   assert.equal(preset[0].provider, null);
 
   const own = routesFor({ ...DefaultSettings, providerRouting: ' DeepInfra/FP8, novita ', fallbackEnabled: false });
   assert.equal(own.length, 1);
   assert.deepEqual(own[0].provider, { order: ['deepinfra/fp8', 'novita'], allow_fallbacks: false });
 
-  const open = routesFor({ ...DefaultSettings, model: 'x/y', providerRouting: '', fallbackModel: '  ' });
+  const open = routesFor({ ...WithFallback, model: 'x/y', providerRouting: '', fallbackModel: '  ' });
   assert.equal(open[0].provider, null, 'leeg: OpenRouter kiest');
   assert.equal(open.length, 1, 'uitwijk zonder model telt niet');
 });
@@ -465,7 +479,7 @@ test('validateRouting: provider of provider/kwantisatie; uitwijk zonder model', 
   assert.deepEqual(validateRouting(DefaultSettings), []);
   assert.deepEqual(validateRouting({ ...DefaultSettings, providerRouting: 'deepinfra/fp8, decart/fp4, novita' }), []);
   const errors = validateRouting({
-    ...DefaultSettings,
+    ...WithFallback,
     providerRouting: 'deepinfra/fp5, deep!infra, a/fp8/x',
     fallbackModel: '',
   });
@@ -556,8 +570,15 @@ test('parseVerdicts leest scores, ook als tekst, en begrenst ze op 0–100', () 
 
 const pubs = (n) =>
   Array.from({ length: n }, (_, i) => ({ sourceName: 'Bron', title: `Titel ${i}`, description: `Tekst ${i}` }));
+// Sinds 0.24.0 is de voorfilter niet vooringevuld; de tests vullen hem zelf.
+const PrefilterFields = {
+  prefilterEndpoint: 'https://openrouter.ai/api/alpha/decisions',
+  prefilterModel: 'typesafe/jev-1.13-20260917',
+  prefilterProviderRouting: 'typesafe',
+};
 const directSettings = {
   ...DefaultSettings,
+  ...PrefilterFields,
   transport: 'direct',
   directBaseUrl: 'https://openrouter.ai/api/v1/',
   directApiKey: 'sk-test',
@@ -618,7 +639,10 @@ test('validateRouting: voorfilter-velden alleen als het vinkje aan staat', () =>
   assert.deepEqual(validateRouting({ ...DefaultSettings, prefilterEndpoint: 'x' }), []);
   const errors = validateRouting({ ...DefaultSettings, jevPrefilterEnabled: true, prefilterEndpoint: 'http://a', prefilterModel: '', prefilterProviderRouting: 'typesafe/fp5' });
   assert.equal(errors.length, 3);
-  assert.deepEqual(validateRouting({ ...DefaultSettings, jevPrefilterEnabled: true }), []);
+  assert.deepEqual(validateRouting({ ...DefaultSettings, ...PrefilterFields, jevPrefilterEnabled: true }), []);
+  assert.ok(validateRouting({ ...DefaultSettings, jevPrefilterEnabled: true }).length > 0, 'aan zonder velden: melding');
+  assert.equal(DefaultSettings.prefilterEndpoint, '', 'niets vooringevuld');
+  assert.equal(DefaultSettings.prefilterModel, '');
 });
 
 test('buildDecisionsRequest: publicaties in state, vraag letterlijk in de noul, tekst van derden niet', () => {

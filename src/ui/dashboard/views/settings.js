@@ -11,7 +11,8 @@ import { el, clear, labelRow } from '../../shared/dom.js';
 import { originPattern } from '../../../core/origins.js';
 import { QUANTIZATIONS, validateRouting } from '../../../core/routing.js';
 import { DefaultSettings } from '../../../core/config.js';
-import { normalizeSynthesisMaxArticles, isLocalBaseUrl } from '../../../core/models.js';
+import { normalizeSynthesisMaxArticles } from '../../../core/models.js';
+import { ApiKind, KnownProviders, apiKind, apiKindOfUrl } from '../../../core/api-kind.js';
 
 export async function renderSettings() {
   const [settings, vault] = await Promise.all([send(Msg.GET_SETTINGS), send(Msg.VAULT_STATUS)]);
@@ -44,20 +45,49 @@ export async function renderSettings() {
 
   const directBaseUrl = input('url', draft.directBaseUrl, (v) => {
     draft.directBaseUrl = v;
+    providerSelect.value = apiKindOfUrl(v);
+    syncRouting();
+  });
+
+  // Aanbieder (B-79): vult de Base-URL in. Welke velden er meegaan, volgt uit
+  // de Base-URL zelf (core/api-kind.js), niet uit deze keuze.
+  const providerSelect = el(
+    'select',
+    {},
+    Object.entries(KnownProviders).map(([value, { label }]) => el('option', { value, text: label })),
+  );
+  providerSelect.value = apiKindOfUrl(draft.directBaseUrl);
+  providerSelect.addEventListener('change', () => {
+    const kind = providerSelect.value;
+    const known = KnownProviders[kind];
+    if (known.baseUrl) {
+      draft.directBaseUrl = known.baseUrl;
+      directBaseUrl.value = known.baseUrl;
+    }
+    // Een model van de vorige aanbieder werkt bij de nieuwe niet: voorstel of leeg.
+    if (kind !== ApiKind.OPENROUTER && String(draft.model ?? '').includes('/')) {
+      draft.model = known.model ?? '';
+      modelInput.value = draft.model;
+    } else if (kind === ApiKind.OPENROUTER && !String(draft.model ?? '').includes('/')) {
+      draft.model = DefaultSettings.model;
+      modelInput.value = draft.model;
+    }
+    syncRouting();
   });
   const directApiKey = input('password', draft.directApiKey, (v) => {
     draft.directApiKey = v;
   });
 
   directFields.append(
-    vault.exists
-      ? null
-      : field('API-key', directApiKey, 'Je persoonlijke OpenRouter-key uit de workspace signaleringen. Die staat op jouw naam en heeft een eigen uitgavenlimiet.'),
+    field('Aanbieder', providerSelect, 'Vult de Base-URL in. Een abonnement (Claude, ChatGPT) geeft geen API-toegang: je hebt een API-key nodig uit de ontwikkelaarsconsole van de aanbieder.'),
     field(
       'Base-URL',
       directBaseUrl,
-      'Standaard https://openrouter.ai/api/v1. Een lokaal model kan ook, bijv. Ollama op http://localhost:11434/v1: vul bij Model de lokale modelnaam in, een API-key is dan niet nodig. Zie Uitleg.',
+      'Het adres van de API. Standaard https://openrouter.ai/api/v1. Elk OpenAI-compatibel endpoint werkt; voor de Claude API https://api.anthropic.com/v1. Een lokaal model kan ook, bijv. Ollama op http://localhost:11434/v1. Zie Uitleg.',
     ),
+    vault.exists
+      ? null
+      : field('API-key', directApiKey, 'Je persoonlijke API-key van de aanbieder hierboven. Een lokaal model heeft geen key nodig. Versleutel de key hieronder met een wachtwoordzin.'),
     vaultSection(vault, draft),
   );
 
@@ -80,6 +110,7 @@ export async function renderSettings() {
   const prefilterEndpoint = input('url', draft.prefilterEndpoint, (v) => {
     draft.prefilterEndpoint = v;
   });
+  prefilterEndpoint.placeholder = 'bijv. https://openrouter.ai/api/alpha/decisions';
   const prefilterApiKey = input('password', draft.prefilterApiKey, (v) => {
     draft.prefilterApiKey = v;
   });
@@ -87,7 +118,7 @@ export async function renderSettings() {
   const prefilterModel = input('text', draft.prefilterModel, (v) => {
     draft.prefilterModel = v;
   });
-  prefilterModel.placeholder = 'bijv. typesafe/jev-1.13-20260917';
+  prefilterModel.placeholder = 'bijv. ~typesafe/jev-latest';
   const prefilterRouting = input('text', draft.prefilterProviderRouting, (v) => {
     draft.prefilterProviderRouting = v;
   });
@@ -107,9 +138,10 @@ export async function renderSettings() {
     field(
       'Model',
       prefilterModel,
-      'Liefst een vaste versie (typesafe/jev-1.13-20260917) in plaats van ~typesafe/jev-latest: de drempel is op versie 1.13 afgesteld en een nieuwe versie mag die niet ongemerkt verschuiven.',
+      'Het beslismodel, bijv. ~typesafe/jev-latest. Een vaste versie (typesafe/jev-1.13-20260917) is stabieler: de drempel is op versie 1.13 afgesteld.',
     ),
-    field('Provider-routing', prefilterRouting, 'Zelfde vorm als bij het taalmodel. Jev draait alleen bij TypeSafe.'),
+    field('Aanbieder (provider-routing)', prefilterRouting, 'Zelfde vorm als bij het taalmodel, bijv. typesafe. Jev draait alleen bij TypeSafe.'),
+    el('div', { class: 'hint', text: 'Alle vier de velden vul je zelf in; zonder endpoint, model en key slaat de extensie de voorfilter over.' }),
     el('div', { class: 'actions' }, [
       el('button', { text: 'Voorfilter testen', onclick: (e) => testPrefilterRoute(e.currentTarget) }),
       prefilterStatus,
@@ -205,15 +237,23 @@ export async function renderSettings() {
     syncRouting();
   });
 
+  const notOpenRouterHint = el('div', {
+    class: 'hint',
+    text: 'Provider-routing en de uitwijkroute werken alleen met OpenRouter. Bij deze aanbieder gaat elk verzoek rechtstreeks naar het model hierboven.',
+  });
+  const openRouterOnly = el('div');
+
   function syncRouting() {
     const preset = String(draft.model ?? '').includes('@preset/');
     providerRouting.disabled = preset;
     presetRoutingHint.style.display = preset ? '' : 'none';
     fallbackFields.style.display = draft.fallbackEnabled ? '' : 'none';
+    const openRouter = apiKind(draft) === ApiKind.OPENROUTER;
+    openRouterOnly.style.display = openRouter ? '' : 'none';
+    notOpenRouterHint.style.display = openRouter ? 'none' : '';
   }
-  syncRouting();
-
-  const routingSection = el('div', {}, [
+  const routingSection = el('div', {}, [notOpenRouterHint, openRouterOnly]);
+  openRouterOnly.append(
     field(
       'Provider-routing',
       providerRouting,
@@ -230,7 +270,8 @@ export async function renderSettings() {
       ),
     ]),
     fallbackFields,
-  ]);
+  );
+  syncRouting();
 
   // ── Automatisch synthetiseren ─────────────────────────────────────────────
   // Hoofdschakelaar. Het interval staat per profiel — verschillende onderwerpen
@@ -340,7 +381,7 @@ export async function renderSettings() {
     field(
       'Model',
       modelInput,
-      'Het model-id bij OpenRouter, bijv. deepseek/deepseek-v4-flash-0731. Kies een gedateerde variant, niet "latest", zodat het model niet ongemerkt verandert. Een preset (@preset/…) kan ook; die draagt dan zijn eigen routing.',
+      'De naam van het model bij je aanbieder. Bij OpenRouter bijv. deepseek/deepseek-v4-flash-0731 (een preset @preset/… kan ook), bij de Claude API bijv. claude-haiku-5-5, bij OpenAI de modelnaam uit je account. Kies bij voorkeur een vaste versie, zodat het model niet ongemerkt verandert.',
     ),
 
     el('h3', { class: 'section-title', text: 'Routing' }),
@@ -380,12 +421,12 @@ export async function renderSettings() {
     try {
       // De proxy is een host als elke andere: zonder toestemming blokkeert de
       // browser de fetch vanuit de service worker.
-      // Zo ook een lokaal model (B-67): de server staat verzoeken van een
-      // extensie meestal alleen toe met toestemming voor die host.
+      // Zo ook een lokaal model (B-67) en elke andere aanbieder dan OpenRouter
+      // (B-79): alleen OpenRouter staat verzoeken uit de browser vanzelf toe.
       const ownHost =
         draft.transport === 'proxy'
           ? draft.proxyUrl.trim()
-          : isLocalBaseUrl(draft.directBaseUrl) ? draft.directBaseUrl.trim() : '';
+          : apiKind(draft) !== ApiKind.OPENROUTER ? draft.directBaseUrl.trim() : '';
       if (ownHost) {
         const origin = originPattern(ownHost);
         // Meteen vragen: Firefox weigert een toestemmingsvraag na een eerdere
@@ -397,7 +438,7 @@ export async function renderSettings() {
             status.textContent =
               draft.transport === 'proxy'
                 ? 'Zonder toestemming voor de proxy-host werkt de verbinding niet.'
-                : 'Zonder toestemming voor het lokale adres werkt de verbinding niet.';
+                : 'Zonder toestemming voor het adres van de aanbieder werkt de verbinding niet.';
             button.disabled = false;
             return false;
           }

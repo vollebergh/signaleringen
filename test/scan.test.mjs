@@ -457,3 +457,94 @@ test('planner: een vergrendelde vault houdt een lokaal model niet tegen, OpenRou
     await saveSettings({ directApiKey: 'sk-test' });
   }
 });
+
+// ── Leesmodus zonder taalmodel (B-82) ──────────────────────────────────────
+
+/** Voert `body` uit zonder taalmodel (geen key), en zet de key daarna terug. */
+async function withoutModel(body) {
+  await saveSettings({ directApiKey: '' });
+  try {
+    return await body();
+  } finally {
+    await saveSettings({ directApiKey: 'sk-test' });
+  }
+}
+
+test('leesmodus: zonder taalmodel ophalen en tonen, niets beoordelen of samenvatten', async () => {
+  const { getScanResults } = await import('../src/data/scan-repository.js');
+  const a = feed([item('r1', 'r1 relevant'), item('r2'), item('r3')]);
+  const profile = await profileWith([a], { userQuery: '' });
+  llm.calls.length = 0;
+
+  const first = await withoutModel(() => runScan(profile.id));
+  assert.equal(first.readerMode, true);
+  assert.deepEqual({ newCount: first.newCount, relevantCount: first.relevantCount, totalFetched: first.totalFetched }, {
+    newCount: 3,
+    relevantCount: 0,
+    totalFetched: 3,
+  });
+  assert.equal(llm.calls.length, 0, 'geen modelaanroep');
+
+  const results = await getScanResults(first.scanId);
+  assert.equal(results.scan.readerMode, true);
+  assert.equal(results.unjudged.length, 3);
+  assert.deepEqual([results.relevant.length, results.possible.length, results.filtered.length], [0, 0, 0]);
+  assert.equal(results.synthesis, null);
+  assert.ok(results.unjudged.every((r) => r.isNew && r.score === null));
+  assert.ok(results.unjudged[0].shortDescription.includes('tekst'), 'begin van de omschrijving');
+
+  const seen = await loadSeen(profile.id);
+  assert.equal(seen.size, 3);
+  assert.ok([...seen.values()].every((r) => r.unjudged === true), 'gezien, maar nog niet beoordeeld');
+
+  // Tweede scan zonder model: wat er al was, is "eerder gezien"; het nieuwe staat bovenaan.
+  feeds.get(a).items.push(item('r4', 'r4 relevant'));
+  const second = await withoutModel(() => runScan(profile.id));
+  assert.equal(second.newCount, 1);
+  const list = (await getScanResults(second.scanId)).unjudged;
+  assert.equal(list.length, 4);
+  assert.equal(list[0].publication.title, 'r4 relevant');
+  assert.deepEqual(list.map((r) => r.isNew), [true, false, false, false]);
+  assert.equal(llm.calls.length, 0);
+});
+
+test('leesmodus: de eerste scan met taalmodel beoordeelt wat al was opgehaald, daarna niet meer', async () => {
+  const a = feed([item('s1', 's1 relevant'), item('s2')]);
+  const profile = await profileWith([a]);
+  await withoutModel(() => runScan(profile.id));
+  llm.calls.length = 0;
+
+  const withModel = await runScan(profile.id);
+  assert.equal(withModel.readerMode, undefined);
+  assert.equal(withModel.newCount, 0, 'niets nieuw: alles kwam al langs');
+  assert.equal(withModel.relevantCount, 1, 'maar wel beoordeeld');
+  assert.deepEqual(llm.calls.map((c) => c.kind), ['filter', 'synthesis']);
+  assert.ok([...(await loadSeen(profile.id)).values()].every((r) => !r.unjudged), 'markering weg');
+
+  llm.calls.length = 0;
+  const again = await runScan(profile.id);
+  assert.equal(again.relevantCount, 0);
+  assert.equal(llm.calls.length, 0, 'een volgende scan beoordeelt het niet opnieuw');
+});
+
+test('leesmodus: een signalering alsnog opstellen kan niet zonder taalmodel', async () => {
+  const a = feed([item('t1', 't1 relevant')]);
+  const profile = await profileWith([a]);
+  const outcome = await withoutModel(() => runScan(profile.id));
+  await assert.rejects(withoutModel(() => synthesizeScan(profile.id, outcome.scanId)), /relevante publicaties|API-key/);
+});
+
+test('planner: zonder taalmodel scant de automaat in leesmodus', async () => {
+  const { runDueScans } = await import('../src/background/scheduler.js');
+  const a = feed([item('u1')]);
+  const profile = await profileWith([a], { autoScanEnabled: true, autoScanIntervalMinutes: 60 });
+  await saveSettings({ autoScanEnabled: true });
+  try {
+    const outcome = await withoutModel(() => runDueScans());
+    assert.ok(outcome.ran >= 1);
+    const [scan] = await getScansForProfile(profile.id);
+    assert.equal(scan.readerMode, true);
+  } finally {
+    await saveSettings({ autoScanEnabled: false });
+  }
+});

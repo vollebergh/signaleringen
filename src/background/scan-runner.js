@@ -20,7 +20,7 @@ import { getSettings, isConfigured, missingConfigMessage } from '../data/setting
 import { withApiKey } from '../data/vault-repository.js';
 import { getProfile } from '../data/profile-repository.js';
 import { normalizeLookbackDays, normalizeSynthesisMaxArticles } from '../core/models.js';
-import { saveScan, saveSynthesis, pruneOldScans, getScanResults } from '../data/scan-repository.js';
+import { saveScan, saveSynthesis, pruneOldScans, getScanResults, UNJUDGED } from '../data/scan-repository.js';
 import { markUnread } from '../data/unread-repository.js';
 import {
   loadSeen,
@@ -28,6 +28,7 @@ import {
   refreshSeen,
   pruneSeen,
   markSynthesised,
+  markJudged,
   recordSourceFetch,
 } from '../data/history-repository.js';
 import { withKeepalive } from './keepalive.js';
@@ -104,7 +105,8 @@ recoverInterruptedScans(isScanning).catch((err) => log.warn('Afgebroken scans na
  *   `sourceIds` beperkt de scan tot deze bronnen; `automatic` (de planner)
  *   zet een nieuwe signalering op ongelezen (B-54) en vraagt bij een grote
  *   scan niet om bevestiging (B-45)
- * @returns {Promise<{scanId: string, relevantCount: number, newCount: number}>}
+ * @returns {Promise<{scanId: string, relevantCount: number, newCount: number, readerMode?: boolean}>}
+ *   `readerMode`: gescand zonder taalmodel (B-82)
  */
 export function runScan(profileId, options = {}) {
   const existing = running.get(profileId);
@@ -171,7 +173,7 @@ async function executeSynthesis(profileId, scanId) {
  *   - opruimen als laatste.
  */
 async function executeScan(profileId, options) {
-  const { profile, settings, sources } = await prepareScan(profileId, options);
+  const { profile, settings, sources, readerMode } = await prepareScan(profileId, options);
   const scanId = crypto.randomUUID();
 
   try {
@@ -184,8 +186,23 @@ async function executeScan(profileId, options) {
     // Wat er nog in een bron staat, blijft "eerder gezien" (CR-05).
     await refreshSeen(fetched.filter((item) => item.seenRecord).map((item) => item.seenRecord), scanDate);
 
-    // Wat gaat er naar het model? Standaard alleen wat dit profiel nog niet zag.
-    const toEvaluate = profile.onlyNewPublications ? newItems : fetched;
+    // ── Leesmodus: geen taalmodel ingesteld (B-82) ────────────────────────
+    if (readerMode) {
+      return await finishReaderScan(profileId, profile, sources, scanId, {
+        scanDate,
+        lookbackDays,
+        seen,
+        fetched,
+        newItems,
+        sourceStatuses,
+      });
+    }
+
+    // Wat gaat er naar het model? Standaard alleen wat dit profiel nog niet
+    // zag, plus wat in leesmodus al langskwam maar nooit beoordeeld is (B-82).
+    const toEvaluate = profile.onlyNewPublications
+      ? fetched.filter((item) => item.isNew || item.seenRecord?.unjudged)
+      : fetched;
 
     const scanBase = {
       id: scanId,
@@ -233,6 +250,7 @@ async function executeScan(profileId, options) {
         })),
       seen,
     );
+    await markJudged(judged.map(({ item }) => item.seenRecord));
 
     const results = judged.map(({ verdict, item }) => toResult(scanId, verdict, item));
     const relevant = results.filter((r) => r.isRelevant);
@@ -282,19 +300,98 @@ async function executeScan(profileId, options) {
   }
 }
 
+/**
+ * Scan zonder taalmodel (B-82): alles wat is opgehaald als lijst, nieuwste
+ * eerst, zonder beoordeling of signalering. Wat nieuw is, wordt vastgelegd als
+ * gezien maar niet beoordeeld; de eerste scan mét taalmodel beoordeelt het
+ * alsnog, zolang het nog in een bron staat.
+ */
+async function finishReaderScan(profileId, profile, sources, scanId, collected) {
+  const { scanDate, lookbackDays, seen, fetched, newItems, sourceStatuses } = collected;
+  await recordSeen(
+    profileId,
+    scanId,
+    newItems.map((item) => ({
+      key: item.key,
+      url: item.publication.url,
+      title: item.publication.title,
+      sourceName: item.publication.sourceName,
+      unjudged: true,
+    })),
+    seen,
+  );
+
+  // De volgorde (nieuw eerst, dan de nieuwste) legt getScanResults vast.
+  const results = fetched.map((item) =>
+    toResult(
+      scanId,
+      {
+        publication: item.publication,
+        // Zonder model geen samenvatting: het begin van de omschrijving.
+        shortDescription: shortText(item.publication.description),
+        isRelevant: false,
+        score: null,
+        relevance: UNJUDGED,
+      },
+      item,
+    ),
+  );
+
+  await saveScan(
+    {
+      id: scanId,
+      profileId,
+      scanDate,
+      readerMode: true,
+      totalFetched: fetched.length,
+      newCount: newItems.length,
+      evaluatedCount: 0,
+      relevantCount: 0,
+      filteredCount: 0,
+      sourceStatuses,
+      scannedSourceIds: sources.map((s) => s.id),
+      onlyNewPublications: profile.onlyNewPublications,
+      lookbackDays,
+    },
+    results,
+  );
+  log.info(`Scan '${profile.name}' zonder taalmodel: ${fetched.length} opgehaald, ${newItems.length} nieuw`);
+  return finishScan(profileId, {
+    scanId,
+    relevantCount: 0,
+    newCount: newItems.length,
+    totalFetched: fetched.length,
+    readerMode: true,
+  });
+}
+
+/** Begin van een omschrijving, op een woordgrens afgekapt. */
+function shortText(text, max = AppConfig.READER_DESCRIPTION_MAX_CHARS) {
+  const clean = String(text ?? '').replace(/\s+/g, ' ').trim();
+  if (clean.length <= max) return clean;
+  const cut = clean.slice(0, max);
+  return `${cut.slice(0, cut.lastIndexOf(' ') > max * 0.6 ? cut.lastIndexOf(' ') : max)}…`;
+}
+
 /** Zet de voortgang op fout en gooit. Voor de voorbereiding, vóór de scan echt begint. */
 function failEarly(profileId, message, extra = {}) {
   setProgress(profileId, { phase: 'error', message, ...extra });
   throw new Error(message);
 }
 
-/** Profiel en instellingen met key; zet bij een fout de voortgang op fout. */
-async function loadProfileAndSettings(profileId) {
+/**
+ * Profiel en instellingen met key; zet bij een fout de voortgang op fout.
+ * Met `allowReaderMode` mag het zonder taalmodel: dan `readerMode: true` (B-82).
+ */
+async function loadProfileAndSettings(profileId, { allowReaderMode = false } = {}) {
   const profile = await getProfile(profileId);
   if (!profile) throw new Error('Profiel niet gevonden');
 
   const stored = await getSettings();
-  if (!(await isConfigured(stored))) failEarly(profileId, missingConfigMessage(stored));
+  if (!(await isConfigured(stored))) {
+    if (allowReaderMode) return { profile, settings: stored, readerMode: true };
+    failEarly(profileId, missingConfigMessage(stored));
+  }
 
   try {
     return { profile, settings: await withApiKey(stored) };
@@ -311,7 +408,7 @@ async function loadProfileAndSettings(profileId) {
 async function prepareScan(profileId, options) {
   // Key uit de vault halen vóór er iets opgehaald wordt: een vergrendelde
   // vault moet de scan tegenhouden, niet pas halverwege laten stranden.
-  const { profile, settings } = await loadProfileAndSettings(profileId);
+  const { profile, settings, readerMode = false } = await loadProfileAndSettings(profileId, { allowReaderMode: true });
 
   // Een scan kan tot een deelverzameling bronnen beperkt worden, zodat je één
   // bron los kunt bijwerken zonder de rest opnieuw op te halen.
@@ -333,7 +430,7 @@ async function prepareScan(profileId, options) {
     });
   }
 
-  return { profile, settings, sources };
+  return { profile, settings, sources, readerMode };
 }
 
 /**
