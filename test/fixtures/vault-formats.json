@@ -1,0 +1,49 @@
+{
+  "_uitleg": "Opgeslagen vaults zoals oudere versies ze in chrome.storage.local achterlieten. NOOIT wijzigen of opnieuw genereren: nieuwe versies moeten precies deze blobs blijven openen. Een nieuw formaat krijgt een eigen, nieuw item.",
+  "passphrase": "wachtwoordzin voor de fixture",
+  "cases": [
+    {
+      "name": "v1, kale key (vóór de eigen voorfilter-key)",
+      "since": "commit 4602c0a (B-49, eerste vault)",
+      "storageLocal": {
+        "vault": {
+          "version": 1,
+          "kdf": "PBKDF2-SHA256",
+          "iterations": 1000,
+          "salt": "YgzwwWcZoi+X0WRfQED+Dg==",
+          "iv": "Ue/aBA5lCekDsukJ",
+          "ciphertext": "qJ0G+dwXur7tdRBm7xdm72VOpl4jGh95NMFReddnh/1QYqUYpV4tXZDJbF+XHCdAr75MUitDqw=="
+        },
+        "settings": {
+          "directApiKey": ""
+        }
+      },
+      "expected": {
+        "directApiKey": "fixture-kale-key-van-voor-de-voorfilter",
+        "prefilterApiKey": ""
+      }
+    },
+    {
+      "name": "v1, JSON met beide keys",
+      "since": "commit 7e45a5e (voorfilter met eigen key)",
+      "storageLocal": {
+        "vault": {
+          "version": 1,
+          "kdf": "PBKDF2-SHA256",
+          "iterations": 1000,
+          "salt": "go2m2b/25Efm12O4H9IvpQ==",
+          "iv": "o/0HWdCBuYQBBTTE",
+          "ciphertext": "j/zyIQELSVsHTYePUsntqTd5cS+5yhXbjeepaE1uu3COv79WJDtYTnh8Xwoy/y05YPMOKvHCOpS1Wi2pEwxxHsdbTQqAJnIIpS+R9z5KLYi4RqDZg6o/ILnB1Y1cJ9sF"
+        },
+        "settings": {
+          "directApiKey": "",
+          "prefilterApiKey": ""
+        }
+      },
+      "expected": {
+        "directApiKey": "fixture-direct-key",
+        "prefilterApiKey": "fixture-voorfilter-key"
+      }
+    }
+  ]
+}
