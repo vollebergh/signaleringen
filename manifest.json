@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Signaleringen",
-  "version": "0.25.0",
+  "version": "0.25.1",
   "description": "Volgt RSS-feeds, webpagina's en open.overheid.nl per profiel en bundelt relevante publicaties tot één signalering per onderwerp.",
   "minimum_chrome_version": "121",
 

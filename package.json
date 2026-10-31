@@ -8,7 +8,9 @@
   },
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "package": "node scripts/package.mjs"
+    "package": "node scripts/package.mjs",
+    "audit": "npm audit",
+    "hooks": "git config core.hooksPath .githooks"
   },
   "devDependencies": {
     "fake-indexeddb": "6.2.5"

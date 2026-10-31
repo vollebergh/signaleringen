@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Controle vóór elke push (B-75): de tests slagen en er staat geen key in de
+# git-historie. Installeren: `npm run hooks`. Overslaan kan met
+# `git push --no-verify`, maar dat hoort een bewuste uitzondering te zijn.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "pre-push: gitleaks niet gevonden; installeer het (https://github.com/gitleaks/gitleaks) en probeer opnieuw." >&2
+  exit 1
+fi
+
+echo "pre-push: tests…"
+npm test --silent
+
+echo "pre-push: gitleaks over de historie…"
+gitleaks detect --no-banner --redact --exit-code 1

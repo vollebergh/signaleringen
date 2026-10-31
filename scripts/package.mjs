@@ -10,6 +10,8 @@
  * denylist). Per browser een eigen manifest. Na het samenstellen draait
  * `gitleaks dir` op de inhoud, plus een eigen controle op OpenRouter-keys en
  * op de key uit `local-settings.json`; bij een treffer komt er geen pakket.
+ * Vooraf draait `npm audit`: een bekende kwetsbaarheid in een testafhankelijkheid
+ * houdt het pakket tegen tot je hem bekeken hebt (B-75).
  *
  * Geen afhankelijkheden: de zip wordt hier zelf geschreven (deflate en crc32
  * uit `node:zlib`).
@@ -211,11 +213,21 @@ function runGitleaks(files) {
   }
 }
 
+/** `npm audit` over de afhankelijkheden (nu alleen die van de tests); gooit bij een melding of als het register onbereikbaar is. */
+function runAudit() {
+  const result = spawnSync('npm', ['audit', '--audit-level=low'], { cwd: ROOT, encoding: 'utf8' });
+  if (result.error?.code === 'ENOENT') throw new Error('npm niet gevonden.');
+  if (result.status !== 0) {
+    throw new Error(`npm audit meldt iets (of het register is niet bereikbaar):\n${result.stdout}${result.stderr}`);
+  }
+}
+
 function main(argv) {
   const browsers = argv.length ? argv : BROWSERS;
   for (const b of browsers) if (!BROWSERS.includes(b)) throw new Error(`Onbekende browser: ${b} (kies uit ${BROWSERS.join(', ')})`);
 
   assertClean();
+  runAudit();
   const files = committedFiles();
   const shared = JSON.parse(files.find(([p]) => p === 'manifest.json')[1].toString('utf8'));
   const commitDate = new Date(git(['log', '-1', '--format=%cI']).toString('utf8').trim());

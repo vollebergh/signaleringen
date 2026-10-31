@@ -92,6 +92,8 @@ Het script (`scripts/package.mjs`, Node 22.2+, geen afhankelijkheden):
   `background.service_worker`, `side_panel`, `minimum_chrome_version` en de
   permissie `sidePanel`;
 - controleert of alles waar het manifest naar verwijst in het pakket zit;
+- draait vooraf `npm audit`; een melding of een onbereikbaar register houdt
+  het pakket tegen;
 - draait `gitleaks dir` op de inhoud en zoekt zelf naar OpenRouter-keys en
   naar de waarden uit jouw `local-settings.json`. Bij een treffer, of als
   `gitleaks` niet is geïnstalleerd, komt er geen pakket.
@@ -110,6 +112,19 @@ De extensie zelf heeft geen npm-afhankelijkheden en geen buildstap.
 `package.json` bestaat alleen voor de tests: `fake-indexeddb` staat exact
 vastgezet met een lockfile, en `.npmrc` zet install-scripts uit. `node_modules/`
 hoort niet in een uitrolpakket.
+
+**Controles bij het pushen en uitrollen (B-75).** Lint, typecontrole en CI
+draaien niet; in plaats daarvan:
+
+| Moment | Wat | Hoe |
+| --- | --- | --- |
+| Elke `git push` | `npm test` en `gitleaks detect` over de hele historie | pre-push-hook in `.githooks/`; eenmalig activeren met `npm run hooks` (zet `core.hooksPath`). Vereist `gitleaks`; zonder dat stopt de push. Overslaan: `git push --no-verify` |
+| Elke uitrol | `npm audit`, daarna gitleaks op het pakket | `npm run package` (zie *Uitrol naar collega's*) |
+| Voor een breder publiek, en bij grote wijzigingen | codebase- en securityreview | handmatig, volgens het protocol; baseline: code review en security audit van 2026-10-13 |
+
+Hoort de repo bij een breder publiek, of komen er meer ontwikkelaars, dan
+wordt dit CI met lint (`eslint-plugin-security`, `no-unsanitized`) en
+`tsc --noEmit` met `checkJs`; zie B-75 in de backlog.
 
 Dekt de XML-pull-parser, feed-mapping (RSS 2.0 en Atom), datumherkenning,
 HTML-stripping, OPML-import, de reparatie van afgekapte LLM-antwoorden, de
