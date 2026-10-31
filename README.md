@@ -10,7 +10,7 @@ Zonder taalmodel werkt de extensie als gewone RSS-feedlezer (zie [Zonder taalmod
 **Inhoud**
 
 - [Wat heb je nodig?](#wat-heb-je-nodig)
-- [Aan de slag in zes stappen](#aan-de-slag-in-zes-stappen)
+- [Aan de slag in zeven stappen](#aan-de-slag-in-zeven-stappen)
 - [Hoe het werkt](#hoe-het-werkt)
 - [Zonder taalmodel](#zonder-taalmodel)
 - [Profielen en bronnen](#profielen-en-bronnen)
@@ -33,10 +33,12 @@ Zonder taalmodel werkt de extensie als gewone RSS-feedlezer (zie [Zonder taalmod
   de API-key. Deze stap is niet verplicht, maar wel aangeraden. Als je je API-key niet 
   versleutelt, wordt deze opgeslagen in het browsergeheugen en kan deze door derden worden uitgelezen.
 
-## Aan de slag in zes stappen
+## Aan de slag in zeven stappen
 
 **1. Installeer de extensie en zet hem vast.**
-Klik daarna op het pictogram (de **popup**) en daarin op **Dashboard**.
+Installeer de extensie via de store. Zet hem daarna vast aan de werkbalk van
+je browser, via het puzzelstukje rechtsboven. Klik op het pictogram (de
+**popup**) en daarin op **Dashboard**.
 
 **2. Kies je aanbieder en plak je API-key.**
 Ga naar **Instellingen**. Laat de route op *Eigen API-key in deze browser*
