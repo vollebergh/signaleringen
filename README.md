@@ -13,9 +13,7 @@ Zonder taalmodel werkt de extensie als gewone RSS-feedlezer (zie [Zonder taalmod
 - [Aan de slag in zes stappen](#aan-de-slag-in-zes-stappen)
 - [Hoe het werkt](#hoe-het-werkt)
 - [Zonder taalmodel](#zonder-taalmodel)
-- [Overzicht van de functies](#overzicht-van-de-functies)
 - [Profielen en bronnen](#profielen-en-bronnen)
-- [Instellingen](#instellingen)
 - [Gegevens bewaren en overzetten](#gegevens-bewaren-en-overzetten)
 - [Kosten en privacy](#kosten-en-privacy)
 - [Problemen oplossen](#problemen-oplossen)
@@ -23,7 +21,6 @@ Zonder taalmodel werkt de extensie als gewone RSS-feedlezer (zie [Zonder taalmod
 
 ## Wat heb je nodig?
 
-- **Browser** Installeer de extensie via de store. Op dit moment is de extensie alleen gepubliceerd voor Edge.
 - **Een API-key**, als je wilt dat de extensie publicaties beoordeelt en
   samenvat. Heb je een key van je organisatie gekregen, gebruik die. Anders
   kun je er zelf een aanmaken bij o.a.:
@@ -48,7 +45,12 @@ staan, kies bij **Aanbieder** waar je key vandaan komt en plak je key bij
 in, bijvoorbeeld `claude-haiku-5-5` bij Anthropic. Klik op **Opslaan**. Bij
 een andere aanbieder dan OpenRouter vraagt de browser één keer toestemming.
 
-**3. Versleutel je key met een wachtwoordzin. Sla deze stap niet over.**
+**3. Stel desgewenst een terugvalmodel en/of een filtermodel in.**
+Een taalmodel kan soms bezet zijn. Voeg desgewenst een terugvalmodel (fallback) toe.
+Bij grotere scans (>100 publicaties) is een decision model zoals Jev sneller dan 
+een taalmodel. 
+
+**4. Versleutel je key met een wachtwoordzin. Sla deze stap niet over.**
 Zonder wachtwoordzin staat je key leesbaar in je browser, en gaat hij leesbaar
 mee als je browser synchroniseert of een back-up maakt. Wie bij je
 browserprofiel kan, kan het gekozen taalmodel op jouw kosten gebruiken.
@@ -64,7 +66,8 @@ Goed om te weten:
 - **Als je je computer afsluit of de extensie updatet** is de key
   vergrendeld; je key en profielen blijven bewaard. Klik in de popup op
   **Ontgrendelen** en typ je wachtwoordzin. Tot dan kan de extensie niet
-  scannen, ook niet automatisch. 
+  scannen, ook niet automatisch. Gebruik een wachtwoordmanager om je wachtwoordzin
+  snel in te voeren.
 - **Key wijzigen?** Klik op **Vault opheffen**, plak de nieuwe key, klik op
   **Opslaan** en versleutel opnieuw.
 - **Wachtwoordzin vergeten?** Die is niet te herstellen, ook niet door de
@@ -75,11 +78,11 @@ Goed om te weten:
   synchronisatie, niet tegen schadelijke software die meekijkt terwijl hij
   ontgrendeld is. Deel je key met niemand.
 
-**4. Test de verbinding.**
+**5. Test de verbinding.**
 Klik onderaan Instellingen op **Verbinding testen**. Je ziet *Verbinding
 werkt*, of een fout (zie [Problemen oplossen](#problemen-oplossen)).
 
-**5. Maak je eerste profiel.**
+**6. Maak je eerste profiel.**
 Ga naar **Profielen** → **Nieuw profiel**. Vul een **Profielnaam** in en bij
 **Waar let je op?** in een of twee zinnen wat je wilt weten, bijvoorbeeld:
 *Wat verandert er in het stikstofbeleid voor de landbouw en de bouw?* Begin
@@ -88,7 +91,7 @@ meer bronnen toe (zie [Profielen en bronnen](#profielen-en-bronnen)), klik bij
 elke bron op **Testen** en geef de browser toestemming om die website te lezen.
 Klik op **Opslaan**.
 
-**6. Doe je eerste scan.**
+**7. Doe je eerste scan.**
 Klik bij je profiel op **Scan nu**. Dat duurt meestal een halve tot een paar
 minuten. Klik daarna op **Lees signalering**.
 
