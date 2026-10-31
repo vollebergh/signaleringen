@@ -50,7 +50,7 @@ export const Msg = Object.freeze({
   TEST_PREFILTER: 'settings/testPrefilter',
   APPLY_SCHEDULE: 'settings/applySchedule',
 
-  // Vault voor de API-key (B-49)
+  // Wachtwoordkluis voor de API-key (B-49)
   VAULT_STATUS: 'vault/status',
   VAULT_ENABLE: 'vault/enable',
   VAULT_UNLOCK: 'vault/unlock',

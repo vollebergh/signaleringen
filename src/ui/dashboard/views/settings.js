@@ -133,7 +133,7 @@ export async function renderSettings() {
       'Een decisions-endpoint voor beslismodellen, bijv. https://openrouter.ai/api/alpha/decisions. Een gewoon chatmodel werkt hier niet.',
     ),
     vault.exists
-      ? field('API-key voor de voorfilter', el('div', { class: 'muted', text: 'Staat versleuteld in de vault. Hef de vault op om hem te wijzigen.' }))
+      ? field('API-key voor de voorfilter', el('div', { class: 'muted', text: 'Staat versleuteld in de wachtwoordkluis. Hef de wachtwoordkluis op om hem te wijzigen.' }))
       : field('API-key voor de voorfilter (optioneel)', prefilterApiKey, 'Leeg: de key van het taalmodel hierboven, maar alleen als het endpoint op dezelfde host staat als de Base-URL (standaard openrouter.ai). Een ander endpoint krijgt die key niet. Een eigen key is handig voor een aparte uitgavenlimiet, en nodig in de proxy-route of bij een ander endpoint.'),
     field(
       'Model',
@@ -480,8 +480,8 @@ export async function renderSettings() {
 }
 
 /**
- * Vault voor de API-key (B-49). Zonder vault staat de key leesbaar in de
- * browseropslag; met vault versleuteld met een wachtwoordzin, en na een
+ * Wachtwoordkluis voor de API-key (B-49). Zonder kluis staat de key leesbaar in de
+ * browseropslag; met kluis versleuteld met een wachtwoordzin, en na een
  * herstart van de browser eerst te ontgrendelen.
  */
 function vaultSection(vault, draft) {
@@ -517,7 +517,7 @@ function vaultSection(vault, draft) {
           onclick: (e) =>
             run(e.currentTarget, async () => {
               if (passphrase.value !== confirmation.value) throw new Error('De wachtwoordzinnen verschillen');
-              // Eerst de key uit het formulier opslaan: de vault versleutelt
+              // Eerst de key uit het formulier opslaan: de kluis versleutelt
               // wat er opgeslagen staat.
               await send(Msg.SAVE_SETTINGS, {
                 patch: { directApiKey: draft.directApiKey, prefilterApiKey: draft.prefilterApiKey },
@@ -548,7 +548,7 @@ function vaultSection(vault, draft) {
         el('button', { text: 'Nu vergrendelen', onclick: (e) => run(e.currentTarget, () => send(Msg.VAULT_LOCK)) }),
         el('button', {
           class: 'danger',
-          text: 'Vault opheffen',
+          text: 'Wachtwoordkluis opheffen',
           title: 'Zet de key weer leesbaar in de browseropslag',
           onclick: (e) => run(e.currentTarget, () => send(Msg.VAULT_DISABLE)),
         }),
@@ -561,13 +561,13 @@ function vaultSection(vault, draft) {
     children.push(
       el('p', {
         class: 'error',
-        text: 'Let op: local-settings.json in de extensiemap bevat nog een leesbare key. Die valt buiten de vault — haal hem daar weg.',
+        text: 'Let op: local-settings.json in de extensiemap bevat nog een leesbare key. Die valt buiten de wachtwoordkluis — haal hem daar weg.',
       }),
     );
   }
 
   return el('div', { class: 'field' }, [
-    el('label', { text: 'Versleuteling van de key' }),
+    el('label', { text: 'Wachtwoordkluis (versleuteling van de key)' }),
     el('div', { class: 'permission-warning' }, children),
   ]);
 }

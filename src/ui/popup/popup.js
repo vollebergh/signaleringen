@@ -96,7 +96,7 @@ async function render() {
       content.append(
         el('div', { class: 'card' }, [
           el('p', { text: 'De API-key is vergrendeld.' }),
-          el('p', { class: 'muted', text: 'Ontgrendel de vault met je wachtwoordzin om te kunnen scannen.' }),
+          el('p', { class: 'muted', text: 'Ontgrendel de wachtwoordkluis met je wachtwoordzin om te kunnen scannen.' }),
           el('button', {
             class: 'primary',
             text: 'Ontgrendelen',

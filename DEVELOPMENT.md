@@ -62,7 +62,7 @@ is opgeslagen — een opgeslagen waarde gaat altijd voor. Het bestand staat in
 `.gitignore` en komt dus niet in de repo en niet in een uitrolpakket.
 
 Het bestand is een gemak voor ontwikkeling, geen opslagplek: de key staat er
-leesbaar in. Gebruik je de vault (zie *Waar de API-key staat*), haal de key
+leesbaar in. Gebruik je de wachtwoordkluis (zie *Waar de API-key staat*), haal de key
 dan uit dit bestand — de extensie waarschuwt daar ook voor.
 
 ## Uitrol naar collega's
@@ -113,7 +113,7 @@ hoort niet in een uitrolpakket.
 
 Dekt de XML-pull-parser, feed-mapping (RSS 2.0 en Atom), datumherkenning,
 HTML-stripping, OPML-import, de reparatie van afgekapte LLM-antwoorden, de
-vertaling van open.overheid-zoek-URL's, de vault, de afbakening van
+vertaling van open.overheid-zoek-URL's, de wachtwoordkluis, de afbakening van
 bronmateriaal in de prompt en de voorfilter met nagebootste Jev-antwoorden
 (normaal, fout → terugval, ontbrekende antwoorden) — de onderdelen waar een stille fout tot lege
 scanresultaten of een lek leidt. Daarnaast de berichtrouter, het ontdubbelen
@@ -125,25 +125,25 @@ en de scan als geheel tegen een echte IndexedDB: ontdubbelen, wat als gezien
 telt, een mislukte bron of synthese, een signalering alsnog opstellen, en het opruimen van de
 gezien-administratie (`test/scan.test.mjs`). Tot slot het inpakscript: allowlist,
 manifest per browser, keycontrole en de zip zelf (`test/package.test.mjs`).
-En of vaults uit oudere versies een update overleven (`test/upgrade.test.mjs`,
+En of wachtwoordkluizen uit oudere versies een update overleven (`test/upgrade.test.mjs`,
 zie *Updates en opgeslagen gegevens*).
 
 ## Updates en opgeslagen gegevens
 
 Bij een update vanuit de store blijft `chrome.storage.local` (instellingen,
-vault) en IndexedDB (profielen, scans) staan; `chrome.storage.session` wordt
-gewist. Een gebruiker met een vault moet na elke update dus opnieuw
+wachtwoordkluis) en IndexedDB (profielen, scans) staan; `chrome.storage.session` wordt
+gewist. Een gebruiker met een wachtwoordkluis moet na elke update dus opnieuw
 ontgrendelen (staat in de README), maar mag zijn key nooit kwijtraken.
 
-**Procescontrole:** `test/upgrade.test.mjs` zet vaults uit oudere versies
+**Procescontrole:** `test/upgrade.test.mjs` zet wachtwoordkluizen uit oudere versies
 (`test/fixtures/vault-formats.json`) in een opslag zoals na een update en
 controleert dat de huidige code ze vergrendeld vindt, met de wachtwoordzin
 opent en de juiste keys teruggeeft; ook de opslagsleutel `vault` ligt vast.
-De test hoort bij `npm test` en faalt bij elke wijziging die bestaande vaults
+De test hoort bij `npm test` en faalt bij elke wijziging die bestaande wachtwoordkluizen
 onleesbaar maakt (gecontroleerd door de opslagsleutel en het lezen van het
 oude formaat tijdelijk te breken).
 
-Regels bij een wijziging aan de vault (`core/vault.js`, `data/vault-repository.js`)
+Regels bij een wijziging aan de wachtwoordkluis (`core/vault.js`, `data/vault-repository.js`)
 of de opslagsleutels:
 
 1. **Fixtures nooit wijzigen of opnieuw genereren.** Faalt de test, dan zou
@@ -152,9 +152,9 @@ of de opslagsleutels:
 2. **Nieuw formaat = nieuw item** in de fixture, aangemaakt met de nieuwe
    code vóór de release, naast de bestaande items. Verhoog `VAULT_VERSION`
    in `core/vault.js` en laat `unlockVault` de oude versies blijven lezen
-   (de iteraties en het algoritme staan per vault in de blob).
-3. **Hogere PBKDF2-iteraties** gelden alleen voor nieuwe vaults; een
-   bestaande vault houdt zijn eigen `iterations`. Wil je bestaande vaults
+   (de iteraties en het algoritme staan per wachtwoordkluis in de blob).
+3. **Hogere PBKDF2-iteraties** gelden alleen voor nieuwe wachtwoordkluizen; een
+   bestaande wachtwoordkluis houdt zijn eigen `iterations`. Wil je bestaande wachtwoordkluizen
    omzetten, doe dat na een geslaagd ontgrendelen (dan is de wachtwoordzin
    bekend) en test ook dat pad.
 4. **Opslagsleutels** (`vault`, `settings`) niet hernoemen zonder migratie.
@@ -194,21 +194,32 @@ Twee routes, in te stellen bij Instellingen:
 
 | Route | Wanneer | Risico |
 | --- | --- | --- |
-| **Eigen API-key in deze browser** (standaard) | Iedere gebruiker heeft een eigen key op eigen naam (B-D09) | Zonder vault staat de key onversleuteld in `chrome.storage.local` en gaat mee in backups en profielsynchronisatie. Aanvaardbaar bij een persoonlijke key met uitgavenlimiet |
+| **Eigen API-key in deze browser** (standaard) | Iedere gebruiker heeft een eigen key op eigen naam (B-D09) | Zonder wachtwoordkluis staat de key onversleuteld in `chrome.storage.local` en gaat mee in backups en profielsynchronisatie. Aanvaardbaar bij een persoonlijke key met uitgavenlimiet |
 | **Via een eigen proxy** | Eén key voor meerdere mensen | De key staat server-side; de extensie kent hem niet |
 
 Een gedeelde key hoort nooit in de `direct`-route: wie het pakket of het
 browserprofiel heeft, leest hem uit.
 
-**Vault (optioneel).** Bij Instellingen kun je de key versleutelen met een
+**Wachtwoordkluis (optioneel).** Bij Instellingen kun je de key versleutelen met een
 wachtwoordzin: PBKDF2-SHA256 (600.000 iteraties) naar AES-GCM-256. De
 versleutelde key staat in `chrome.storage.local`, de afgeleide sleutel alleen
 in `chrome.storage.session` — in het geheugen, weg bij een herstart van de
 browser. Daarna vraagt de extensie de wachtwoordzin opnieuw; scans en de
-planner wachten tot dan. De vault beschermt de key in het profielbestand,
+planner wachten tot dan. De wachtwoordkluis beschermt de key in het profielbestand,
 backups en synchronisatie; **niet** tegen code die draait terwijl hij
-ontgrendeld is. Een vergeten wachtwoordzin is niet te herstellen: hef de vault
+ontgrendeld is. Een vergeten wachtwoordzin is niet te herstellen: hef de wachtwoordkluis
 dan op door de extensiedata te wissen en vul de key opnieuw in.
+
+Zit de wachtwoordkluis op slot terwijl de key nodig is, dan staat er een 🔒
+op het extensiepictogram (`isKeyLocked` in `data/vault-repository.js`,
+`updateBadge` in `background/badge.js`; de badge wordt bijgewerkt na elke
+slotwijziging en bij het starten van de browser).
+
+**Naamgeving.** Voor gebruikers heet dit *wachtwoordkluis*. In de code blijft
+het `vault` (`core/vault.js`, `data/vault-repository.js`, `Msg.VAULT_*`,
+`VaultLockedError`), net als de opslagsleutels `vault` en `vaultSessionKey` en
+de fixtures in `test/fixtures/`: die laatste zijn bevroren voor de
+updatetest en worden niet hernoemd zonder migratie.
 
 **Uitgavenlimiet en verbruik** per key regel je in de OpenRouter-workspace
 `signaleringen` (openrouter.ai): daar zet je per key een limiet en zie je het
@@ -405,7 +416,7 @@ velden ontbreken (`validateRouting`).
 | Veld | Voorbeeld | Toelichting |
 | --- | --- | --- |
 | Endpoint | `https://openrouter.ai/api/alpha/decisions` | Een decisions-endpoint; een chatmodel werkt hier niet |
-| API-key | leeg | Leeg: de key van het taalmodel, alleen bij dezelfde host. Eigen key: aparte uitgavenlimiet, en nodig via een proxy of een andere aanbieder. Gaat mee in de vault |
+| API-key | leeg | Leeg: de key van het taalmodel, alleen bij dezelfde host. Eigen key: aparte uitgavenlimiet, en nodig via een proxy of een andere aanbieder. Gaat mee in de wachtwoordkluis |
 | Model | `~typesafe/jev-latest` | Een vaste versie (`typesafe/jev-1.13-20260917`) is stabieler: de drempel is op 1.13 afgesteld |
 | Aanbieder (provider-routing) | `typesafe` | Zelfde vorm als bij het taalmodel |
 
@@ -509,7 +520,7 @@ ongezien, en wordt niets twee keer beoordeeld. Wat al uit de bron verdwenen
 is, wordt niet meer beoordeeld.
 
 *Signalering opstellen* (`synthesizeScan`) blijft een taalmodel eisen. De
-planner scant zonder taalmodel ook, in leesmodus; een vergrendelde vault
+planner scant zonder taalmodel ook, in leesmodus; een vergrendelde wachtwoordkluis
 houdt hem alleen tegen als er wél een taalmodel is. De popup toont zonder
 taalmodel een melding in plaats van een blokkade. Tests: *leesmodus* en
 *planner: zonder taalmodel* in `test/scan.test.mjs`.

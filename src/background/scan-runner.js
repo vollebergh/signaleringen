@@ -406,8 +406,8 @@ async function loadProfileAndSettings(profileId, { allowReaderMode = false } = {
  * de toestemmingen. Elke fout stopt de scan vóór er iets is opgehaald.
  */
 async function prepareScan(profileId, options) {
-  // Key uit de vault halen vóór er iets opgehaald wordt: een vergrendelde
-  // vault moet de scan tegenhouden, niet pas halverwege laten stranden.
+  // Key uit de wachtwoordkluis halen vóór er iets opgehaald wordt: een vergrendelde
+  // kluis moet de scan tegenhouden, niet pas halverwege laten stranden.
   const { profile, settings, readerMode = false } = await loadProfileAndSettings(profileId, { allowReaderMode: true });
 
   // Een scan kan tot een deelverzameling bronnen beperkt worden, zodat je één

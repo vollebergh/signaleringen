@@ -4,7 +4,7 @@
  * ⚠️ Browseropslag is niet versleuteld. Een API-key die leesbaar in de
  * instellingen staat, is leesbaar voor wie bij het browserprofiel kan, en gaat
  * mee in een backup of profielsynchronisatie. Aanvaardbaar bij een persoonlijke
- * key met uitgavenlimiet (B-D09). Wie dat niet wil, zet de key in de vault
+ * key met uitgavenlimiet (B-D09). Wie dat niet wil, zet de key in de wachtwoordkluis
  * (vault-repository.js, B-49). Zie de architectuurnotitie in de Obsidian-vault.
  */
 
@@ -55,7 +55,7 @@ export async function getSettings() {
  * afwijken van standaard ← lokaal bestand (CR-03). Zo komt een key uit
  * local-settings.json niet in de browseropslag terecht, en verdwijnt hij weer
  * als hij uit het bestand gaat. Een bewuste afwijking blijft wel staan, ook
- * een lege waarde: die wint van het bestand (vault, zie vault-repository.js).
+ * een lege waarde: die wint van het bestand (wachtwoordkluis, zie vault-repository.js).
  * Geëxporteerd voor de tests.
  */
 export function settingsToStore(defaults, local, next) {
@@ -75,8 +75,8 @@ export async function saveSettings(patch) {
   return next;
 }
 
-// De vault zelf (B-49) staat in vault-repository.js; die bouwt hierop voort.
-// Hier alleen de opslagsleutel, zodat `isConfigured` een vault kan zien
+// De wachtwoordkluis zelf (B-49) staat in vault-repository.js; die bouwt hierop voort.
+// Hier alleen de opslagsleutel, zodat `isConfigured` een kluis kan zien
 // zonder dat de import de andere kant op loopt (CR-16).
 export const VAULT_STORAGE_KEY = 'vault';
 
@@ -86,7 +86,7 @@ async function hasVault() {
 
 /**
  * Is er genoeg geconfigureerd om een scan te kunnen draaien?
- * Tegenhanger van `isConfigured()`. Een vergrendelde vault telt als
+ * Tegenhanger van `isConfigured()`. Een vergrendelde kluis telt als
  * geconfigureerd; `withApiKey` meldt daarna dat hij op slot zit.
  */
 export async function isConfigured(settings) {

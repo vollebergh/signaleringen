@@ -30,7 +30,7 @@ Zonder taalmodel werkt de extensie als gewone RSS-feedlezer (zie [Zonder taalmod
   Het is mogelijk om handmatig API-keys en endpoints van je eigen provider op te geven. Ook lokale modellen worden ondersteund.
   Let erop dat je zelf verantwoordelijk bent voor de kosten die je maakt op je API-key.
 - **Een wachtwoordzin** die je zelf bedenkt en onthoudt. Hiermee versleutel je
-  de API-key. Deze stap is niet verplicht, maar wel aangeraden. Als je je API-key niet 
+  de API-key in een wachtwoordkluis. Deze stap is niet verplicht, maar wel aangeraden. Als je je API-key niet
   versleutelt, wordt deze opgeslagen in het browsergeheugen en kan deze door derden worden uitgelezen.
 
 ## Aan de slag in zeven stappen
@@ -57,7 +57,7 @@ Zonder wachtwoordzin staat je key leesbaar in je browser, en gaat hij leesbaar
 mee als je browser synchroniseert of een back-up maakt. Wie bij je
 browserprofiel kan, kan het gekozen taalmodel op jouw kosten gebruiken.
 
-1. Zoek bij Instellingen het blok **Versleuteling van de key**.
+1. Zoek bij Instellingen het blok **Wachtwoordkluis (versleuteling van de key)**.
 2. Typ twee keer dezelfde wachtwoordzin, minstens 8 tekens. Een zin van een
    paar woorden is sterker en makkelijker te onthouden dan een kort
    wachtwoord.
@@ -67,10 +67,11 @@ Goed om te weten:
 
 - **Als je je computer afsluit of de extensie updatet** is de key
   vergrendeld; je key en profielen blijven bewaard. Klik in de popup op
-  **Ontgrendelen** en typ je wachtwoordzin. Tot dan kan de extensie niet
+  **Ontgrendelen** en typ je wachtwoordzin. Een slotje op het pictogram laat
+  zien dat de wachtwoordkluis vergrendeld is. Tot dan kan de extensie niet
   scannen, ook niet automatisch. Gebruik een wachtwoordmanager om je wachtwoordzin
   snel in te voeren.
-- **Key wijzigen?** Klik op **Vault opheffen**, plak de nieuwe key, klik op
+- **Key wijzigen?** Klik op **Wachtwoordkluis opheffen**, plak de nieuwe key, klik op
   **Opslaan** en versleutel opnieuw.
 - **Wachtwoordzin vergeten?** Die is niet te herstellen, ook niet door de
   ontwikkelaar. Exporteer je profielen (zie

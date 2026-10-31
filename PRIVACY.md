@@ -1,6 +1,6 @@
 # Privacybeleid Signaleringen
 
-*Versie 1 · 28 oktober 2026*
+*Versie 2 · 31 oktober 2026*
 
 Signaleringen is een browserextensie die publicaties uit bronnen volgt die u zelf kiest, door een taalmodel laat beoordelen en per profiel bundelt tot één signalering.
 
@@ -16,7 +16,7 @@ Signaleringen is een browserextensie die publicaties uit bronnen volgt die u zel
 
 Profielen en hun vragen, bronnen, gevonden publicaties (titel, adres, datum en een kort tekstfragment), scanresultaten, signaleringen, de status gezien/verwerkt en uw instellingen. De status gezien/verwerkt wordt 180 dagen nadat een publicatie voor het laatst in een bron stond, automatisch opgeruimd; scans blijven per profiel de laatste vijf bewaard. Dit staat in `chrome.storage.local` en IndexedDB van uw browserprofiel. Het verlaat uw apparaat alleen via de functies hieronder en via de synchronisatie of back-up van uw browser zelf.
 
-Uw API-key staat in dezelfde opslag. Met de optie *Vault* (Instellingen) versleutelt u hem met een wachtwoordzin (PBKDF2-SHA256, 600.000 iteraties, AES-GCM-256). Zonder vault staat hij onversleuteld en gaat hij mee met synchronisatie en back-ups van uw browser. Een vergeten wachtwoordzin is niet te herstellen.
+Uw API-key staat in dezelfde opslag. Met de optie *Wachtwoordkluis* (Instellingen) versleutelt u hem met een wachtwoordzin (PBKDF2-SHA256, 600.000 iteraties, AES-GCM-256). Zonder wachtwoordkluis staat hij onversleuteld en gaat hij mee met synchronisatie en back-ups van uw browser. Een vergeten wachtwoordzin is niet te herstellen.
 
 U kunt alles exporteren, importeren en verwijderen via het dashboard; het verwijderen van de extensie wist ook de lokale gegevens.
 
@@ -32,11 +32,13 @@ Bij een scan stuurt de extensie per publicatie:
 | Uw vraag van het profiel en, indien ingevuld, de aanvullende instructie | zoals ingevoerd |
 | Uw API-key, in de autorisatiekop | n.v.t. |
 
-**Naar wie:** naar het endpoint dat u bij *Instellingen* invult. Standaard is dat de gateway OpenRouter (`openrouter.ai`); die stuurt de aanvraag door naar het model en de aanbieder die u kiest. U kunt in plaats daarvan een eigen proxy of een lokaal model invullen.
+**Naar wie:** naar het endpoint dat u bij *Instellingen* invult. Standaard is dat de gateway OpenRouter (`openrouter.ai`); die stuurt de aanvraag door naar het model en de aanbieder die u kiest. U kunt in plaats daarvan rechtstreeks een andere aanbieder kiezen, een endpoint dat werkt zoals de API van OpenAI, een eigen proxy of een lokaal model invullen. Een lokaal model stuurt niets naar buiten.
+
+**Zonder taalmodel** stuurt de extensie niets naar een taalmodel. Ze haalt dan alleen de bronnen op die u zelf toevoegt en toont de publicaties als lijst.
 
 **Wie waarvoor verantwoordelijk is.** De uitgever sluit geen overeenkomst met modelaanbieders namens u en heeft geen inzage in wat zij met uw gegevens doen. Voor de verwerking gelden de voorwaarden van het endpoint en van de aanbieder die u zelf kiest. Controleer vóór gebruik of die aanbieder uw invoer niet bewaart en er niet mee traint. Bij OpenRouter kunt u in uw account (*Privacy*) instellen dat alleen aanbieders met *zero data retention* of zonder training worden gebruikt; dat geldt dan ook voor uw scans.
 
-**Uitwijk (standaard aan).** Blijft het eerste model na herhaalde pogingen tijdelijk onbereikbaar, dan gaat dezelfde inhoud naar het uitwijkmodel en de aanbieder die bij *Routing* staan. Die uitwijk staat standaard aan met een vooringesteld model; u kunt model en aanbieder wijzigen of de uitwijk uitzetten. Ook hiervoor geldt: controleer het databeleid van die aanbieder.
+**Uitwijk (optioneel, standaard uit).** Zet u de uitwijk aan en blijft het eerste model na herhaalde pogingen tijdelijk onbereikbaar, dan gaat dezelfde inhoud naar het uitwijkmodel en de aanbieder die u bij *Routing* zelf invult. Zonder dat vinkje gebeurt dat niet. Ook hiervoor geldt: controleer het databeleid van die aanbieder.
 
 **Voorfilter (optioneel, standaard uit).** Zet u *Voorfilter* aan, dan gaan titel, tekstfragment (max. 1.000 tekens), bronnaam en uw vraag (max. 500 tekens) naar het decisions-endpoint en het beslismodel dat u daar instelt. Zonder dit vinkje gebeurt dat niet.
 

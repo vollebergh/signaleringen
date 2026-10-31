@@ -22,7 +22,7 @@ globalThis.chrome = {
 };
 
 const { getUnread, markUnread, markRead, forget } = await import('../src/data/unread-repository.js');
-const { badgeText, badgeTitle } = await import('../src/background/badge.js');
+const { badgeText, badgeTitle, updateBadge, LOCKED_BADGE_TEXT } = await import('../src/background/badge.js');
 
 test('zonder opgeslagen status is er niets ongelezen', async () => {
   assert.deepEqual(await getUnread(), {});
@@ -70,4 +70,50 @@ test('badgetekst en titel', () => {
   assert.equal(badgeTitle(0), 'Signaleringen');
   assert.match(badgeTitle(1), /1 profiel met/);
   assert.match(badgeTitle(2), /2 profielen met/);
+});
+
+test('slotje op het pictogram zolang de wachtwoordkluis vergrendeld is', async () => {
+  const session = {};
+  const badge = { text: null, title: null };
+  chrome.runtime = { getURL: (path) => `chrome-extension://test-extension/${path}` };
+  chrome.storage.session = {
+    async get(key) {
+      return key in session ? { [key]: session[key] } : {};
+    },
+    async set(items) {
+      Object.assign(session, items);
+    },
+  };
+  chrome.action = {
+    async setBadgeText({ text }) {
+      badge.text = text;
+    },
+    async setTitle({ title }) {
+      badge.title = title;
+    },
+    async setBadgeBackgroundColor() {},
+  };
+  // Standaardinstellingen: route 'direct', geen leesbare key; de kluis ligt er wel.
+  store.settings = { transport: 'direct', directApiKey: '', directBaseUrl: 'https://openrouter.ai/api/v1' };
+  store.vault = { version: 1 };
+  for (const k of Object.keys(store)) if (k.startsWith('unread')) delete store[k];
+
+  await updateBadge();
+  assert.equal(badge.text, LOCKED_BADGE_TEXT);
+  assert.match(badge.title, /wachtwoordkluis vergrendeld/);
+
+  session.vaultSessionKey = 'sleutel';
+  await updateBadge();
+  assert.equal(badge.text, '');
+  assert.equal(badge.title, 'Signaleringen');
+
+  delete session.vaultSessionKey;
+  store.settings.directBaseUrl = 'http://localhost:11434/v1';
+  await updateBadge();
+  assert.equal(badge.text, '', 'een lokaal model heeft geen key nodig');
+});
+
+test('titel bij vergrendelde kluis noemt ook een nieuwe signalering', () => {
+  assert.match(badgeTitle(2, true), /vergrendeld.*2 profielen met een nieuwe signalering/);
+  assert.equal(badgeTitle(0, false), 'Signaleringen');
 });

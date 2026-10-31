@@ -10,7 +10,7 @@
  *
  * Wat dit wél en niet afdekt staat in de architectuurnotitie §11: het
  * beschermt de key in het profielbestand, backups en synchronisatie, maar niet
- * tegen code die draait terwijl de vault ontgrendeld is.
+ * tegen code die draait terwijl de wachtwoordkluis ontgrendeld is.
  */
 
 const VAULT_VERSION = 1;

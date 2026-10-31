@@ -282,9 +282,9 @@ export const AppConfig = {
  * Standaardinstellingen.
  *
  * `direct` is de standaardroute: iedere gebruiker voert een eigen API-key in
- * (B-D09). Zonder vault staat die onversleuteld in `chrome.storage.local`;
+ * (B-D09). Zonder wachtwoordkluis staat die onversleuteld in `chrome.storage.local`;
  * aanvaardbaar bij een persoonlijke key met uitgavenlimiet, niet bij een
- * gedeelde. De vault (B-49) versleutelt hem met een wachtwoordzin.
+ * gedeelde. De wachtwoordkluis (B-49) versleutelt hem met een wachtwoordzin.
  *
  * `proxy` stuurt in plaats daarvan naar een eigen endpoint dat de key
  * server-side zet. Nodig zodra één key door meerdere mensen gebruikt wordt.

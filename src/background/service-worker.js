@@ -265,18 +265,28 @@ const handlers = {
 
   [Msg.TEST_PREFILTER]: async () => {
     const stored = await getSettings();
-    // Ook met het vinkje uit testen: de key uit de vault is dan wel nodig.
+    // Ook met het vinkje uit testen: de key uit de wachtwoordkluis is dan wel nodig.
     return testPrefilter(await withApiKey({ ...stored, jevPrefilterEnabled: true }));
   },
 
   [Msg.VAULT_STATUS]: () => getVaultStatus(),
-  [Msg.VAULT_ENABLE]: ({ passphrase }) => enableVault(passphrase),
+  [Msg.VAULT_ENABLE]: async ({ passphrase }) => {
+    await enableVault(passphrase);
+    await updateBadge();
+  },
   [Msg.VAULT_UNLOCK]: async ({ passphrase }) => {
     await unlock(passphrase);
     await applySchedule();
+    await updateBadge();
   },
-  [Msg.VAULT_LOCK]: () => lock(),
-  [Msg.VAULT_DISABLE]: () => disableVault(),
+  [Msg.VAULT_LOCK]: async () => {
+    await lock();
+    await updateBadge();
+  },
+  [Msg.VAULT_DISABLE]: async () => {
+    await disableVault();
+    await updateBadge();
+  },
 };
 
 chrome.runtime.onMessage.addListener(createMessageListener(handlers, chrome.runtime.id));
