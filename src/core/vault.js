@@ -96,7 +96,8 @@ export async function unlockVault(vault, passphrase) {
   try {
     await decryptVault(vault, sessionKey);
   } catch {
-    throw new Error('Onjuiste wachtwoordzin');
+    // Een verwachte fout van de gebruiker, geen storing: de router logt hem als waarschuwing.
+    throw Object.assign(new Error('Onjuiste wachtwoordzin'), { expected: true });
   }
   return sessionKey;
 }

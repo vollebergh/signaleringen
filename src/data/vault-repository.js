@@ -115,6 +115,7 @@ export class VaultLockedError extends Error {
   constructor() {
     super('De API-key is vergrendeld. Open Instellingen en ontgrendel de wachtwoordkluis met je wachtwoordzin.');
     this.name = 'VaultLockedError';
+    this.expected = true; // gebruikerssituatie, geen storing (router: waarschuwing)
   }
 }
 

@@ -443,6 +443,45 @@ test('S-16: een nieuwe key wordt gebonden aan de Base-URL; alleen de URL verande
   await saveSettings({ ...SuggestedConnection, directApiKey: 'sk-test' });
 });
 
+test('B-88: opslaan vanuit Instellingen houdt de binding bij, ook met een verouderd formulier', async () => {
+  const { getSettings, saveSettingsFromUi } = await import('../src/data/settings-repository.js');
+  // Uitgangspunt: een installatie zonder key en zonder binding, zoals een verse.
+  await saveSettings({ ...SuggestedConnection, directApiKey: '', directApiKeyHost: '' });
+  // Het formulier laadt de instellingen één keer en stuurt bij elke opslag het hele draft.
+  const draft = { ...(await getSettings()) };
+  const save = (changes, options) => saveSettingsFromUi({ ...draft, ...changes }, options);
+
+  // 1. Key typen en opslaan: gebonden aan de Base-URL van het formulier.
+  draft.directApiKey = 'sk-eerste';
+  await save({}, { keyEntered: true });
+  assert.equal((await getSettings()).directApiKeyHost, 'openrouter.ai');
+
+  // 2. (a) Nogmaals opslaan met hetzelfde, verouderde draft (zoals *Verbinding
+  // testen* doet): de binding blijft.
+  await save({});
+  assert.equal((await getSettings()).directApiKeyHost, 'openrouter.ai', 'tweede opslag wist de binding niet');
+
+  // 3. Alleen de Base-URL veranderen: de key blijft aan de oude host.
+  await save({ directBaseUrl: 'https://llm.example.org/v1' });
+  assert.equal((await getSettings()).directApiKeyHost, 'openrouter.ai', 'alleen de URL: binding blijft');
+
+  // 4. (b) Nieuwe key bij de nieuwe Base-URL: de binding volgt, ook al staat er
+  // in het draft nog de oude host.
+  await save({ directBaseUrl: 'https://llm.example.org/v1', directApiKey: 'sk-tweede', directApiKeyHost: 'openrouter.ai' }, { keyEntered: true });
+  assert.equal((await getSettings()).directApiKeyHost, 'llm.example.org', 'nieuwe key: binding volgt de Base-URL');
+
+  // 5. Dezelfde key opnieuw typen bij een andere Base-URL bindt ook opnieuw:
+  // anders kan de gebruiker een key niet naar een tweede adres meenemen.
+  await save({ directBaseUrl: 'https://api.openai.com/v1', directApiKey: 'sk-tweede' }, { keyEntered: true });
+  assert.equal((await getSettings()).directApiKeyHost, 'api.openai.com', 'zelfde key getypt: opnieuw gebonden');
+
+  // 6. Een leeg sleutelveld (kluis aan) bindt niets en wist niets.
+  await save({ directApiKey: '', prefilterApiKey: '' }, { keyEntered: true });
+  assert.equal((await getSettings()).directApiKeyHost, 'api.openai.com', 'lege key bindt niet');
+
+  await saveSettings({ ...SuggestedConnection, directApiKey: 'sk-test' });
+});
+
 // ── Vault en instellingen samen (CR-16 splitst ze) ────────────────────────
 
 test('vault: aanzetten, vergrendelen, ontgrendelen en opheffen', async () => {

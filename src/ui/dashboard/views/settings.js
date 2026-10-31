@@ -65,22 +65,42 @@ export async function renderSettings() {
     keyHostHint.style.display = mismatch ? '' : 'none';
   }
   directBaseUrl.placeholder = `bijv. ${SuggestedConnection.directBaseUrl}`;
+  // De gebruiker typte een key sinds de laatste opslag: die bindt aan de Base-URL
+  // in het formulier (B-88). Zonder dat beslist de worker, niet het formulier.
+  let keyEntered = false;
   const directApiKey = input('password', draft.directApiKey, (v) => {
     draft.directApiKey = v;
+    keyEntered = true;
     syncKeyHost();
   });
 
+  // De kluissectie wordt opnieuw getekend als de kluis elders (popup) wordt
+  // ontgrendeld of vergrendeld, zonder de rest van het formulier aan te raken.
+  const vaultHost = el('div');
+  const renderVault = () => vaultHost.replaceChildren(vaultSection(vault, draft));
+  renderVault();
+  const onStorageChanged = async (changes, area) => {
+    if (!vaultHost.isConnected) return chrome.storage.onChanged.removeListener(onStorageChanged);
+    // `vaultSessionKey`: de sessiesleutel uit vault-repository.js.
+    if (area !== 'session' || !changes.vaultSessionKey) return;
+    Object.assign(vault, await send(Msg.VAULT_STATUS));
+    renderVault();
+  };
+  chrome.storage.onChanged.addListener(onStorageChanged);
+
   directFields.append(
-    field(
-      'Base-URL',
-      directBaseUrl,
-      'Het adres van de API, bijv. https://openrouter.ai/api/v1. Elk OpenAI-compatibel endpoint werkt; voor de Claude API https://api.anthropic.com/v1. Een lokaal model kan ook, bijv. Ollama op http://localhost:11434/v1. Leeg: geen taalmodel, de extensie werkt dan als feedlezer. Een abonnement (Claude, ChatGPT) geeft geen API-toegang: je hebt een API-key uit de ontwikkelaarsconsole van de aanbieder nodig. Zie Uitleg.',
-    ),
-    vault.exists
-      ? null
-      : field('API-key', directApiKey, 'Je persoonlijke API-key van de aanbieder van de Base-URL. Een lokaal model heeft geen key nodig. Versleutel de key hieronder met een wachtwoordzin.'),
-    keyHostHint,
-    vaultSection(vault, draft),
+    ...[
+      field(
+        'Base-URL',
+        directBaseUrl,
+        'Het adres van de API, bijv. https://openrouter.ai/api/v1. Elk OpenAI-compatibel endpoint werkt; voor de Claude API https://api.anthropic.com/v1. Een lokaal model kan ook, bijv. Ollama op http://localhost:11434/v1. Leeg: geen taalmodel, de extensie werkt dan als feedlezer. Een abonnement (Claude, ChatGPT) geeft geen API-toegang: je hebt een API-key uit de ontwikkelaarsconsole van de aanbieder nodig. Zie Uitleg.',
+      ),
+      vault.exists
+        ? null
+        : field('API-key', directApiKey, 'Je persoonlijke API-key van de aanbieder van de Base-URL. Een lokaal model heeft geen key nodig. Versleutel de key hieronder met een wachtwoordzin.'),
+      keyHostHint,
+      vaultHost,
+    ].filter(Boolean), // `append(null)` zet de tekst "null" neer (B-89)
   );
   syncKeyHost();
 
@@ -449,7 +469,14 @@ export async function renderSettings() {
         }
       }
 
-      await send(Msg.SAVE_SETTINGS, { patch: draft });
+      const saved = await send(Msg.SAVE_SETTINGS, { patch: draft, keyEntered });
+      keyEntered = false;
+      // De worker bepaalt de binding; het formulier neemt hem over, zodat de
+      // waarschuwing bij de Base-URL klopt en een volgende opslag niets wist (B-88).
+      settings.directApiKeyHost = saved.directApiKeyHost;
+      settings.directApiKey = saved.directApiKey;
+      draft.directApiKeyHost = saved.directApiKeyHost;
+      syncKeyHost();
       out.className = 'muted';
       out.textContent = 'Opgeslagen.';
       return true;

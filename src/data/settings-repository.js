@@ -88,6 +88,25 @@ export async function saveSettings(patch) {
   return next;
 }
 
+/**
+ * Opslaan vanuit Instellingen (B-88). Het formulier stuurt het hele draft mee,
+ * dus ook een verouderde `directApiKeyHost`; die mag de binding nooit
+ * overschrijven (opslaan en daarna testen wiste hem, en een nieuwe key bij een
+ * nieuwe Base-URL bleef aan de oude host hangen). De UI beslist de binding dus
+ * niet zelf: alleen `keyEntered` (de gebruiker typte een key) bindt de key aan
+ * de Base-URL uit het formulier, ook als het dezelfde key is als eerst.
+ * Alle andere gevallen volgen `saveSettings`.
+ */
+export async function saveSettingsFromUi(patch, { keyEntered = false } = {}) {
+  const { directApiKeyHost: _stale, ...rest } = patch;
+  const typed = String(rest.directApiKey ?? '').trim();
+  if (keyEntered && typed) {
+    const baseUrl = rest.directBaseUrl ?? (await getSettings()).directBaseUrl;
+    return saveSettings({ ...rest, directApiKeyHost: hostOf(baseUrl) ?? '' });
+  }
+  return saveSettings(rest);
+}
+
 // De wachtwoordkluis zelf (B-49) staat in vault-repository.js; die bouwt hierop voort.
 // Hier alleen de opslagsleutel, zodat `isConfigured` een kluis kan zien
 // zonder dat de import de andere kant op loopt (CR-16).

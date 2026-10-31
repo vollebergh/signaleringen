@@ -29,8 +29,10 @@ export function createMessageListener(handlers, extensionId) {
       .then(() => handler(message.payload ?? {}))
       .then((data) => sendResponse({ ok: true, data }))
       .catch((err) => {
-        if (!err?.cancelled) log.error(`Bericht '${message.type}' mislukt`, err);
         // `cancelled`: de gebruiker stopte een grote scan (B-45) — geen storing.
+        // `expected`: een fout die bij normaal gebruik hoort (verkeerde
+        // wachtwoordzin, vergrendelde kluis): een waarschuwing, geen `error`.
+        if (!err?.cancelled) log[err?.expected ? 'warn' : 'error'](`Bericht '${message.type}' mislukt`, err);
         sendResponse({ ok: false, error: err?.message ?? String(err), cancelled: Boolean(err?.cancelled) });
       });
 

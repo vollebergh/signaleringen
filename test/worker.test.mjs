@@ -69,6 +69,34 @@ test('router: een gestopte scan (B-45) gaat door als cancelled', async () => {
   assert.equal(response.cancelled, true);
 });
 
+test('router: een verwachte fout (verkeerde wachtwoordzin) is een waarschuwing, een echte fout een error', async () => {
+  const { log } = await import('../src/core/logger.js');
+  const warn = mock.method(log, 'warn', () => {});
+  const error = mock.method(log, 'error', () => {});
+  try {
+    const listener = createMessageListener(
+      {
+        verwacht: () => {
+          throw Object.assign(new Error('Onjuiste wachtwoordzin'), { expected: true });
+        },
+        stuk: () => {
+          throw new Error('kapot');
+        },
+      },
+      OWN_ID,
+    );
+    const expected = await dispatch(listener, { type: 'verwacht' });
+    assert.equal(expected.ok, false, 'de UI krijgt de fout gewoon terug');
+    assert.equal(warn.mock.callCount(), 1);
+    assert.equal(error.mock.callCount(), 0);
+    await dispatch(listener, { type: 'stuk' });
+    assert.equal(error.mock.callCount(), 1);
+  } finally {
+    warn.mock.restore();
+    error.mock.restore();
+  }
+});
+
 test('router: een onbekend bericht laat het kanaal dicht', () => {
   const listener = createMessageListener({}, OWN_ID);
   assert.equal(listener({ type: 'onbekend' }, { id: OWN_ID }, () => {}), false);

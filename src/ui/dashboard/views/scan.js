@@ -67,7 +67,9 @@ export async function renderScan(profileId, scanId) {
         : scan.onlyNewPublications
         ? el('p', {
             class: 'muted',
-            text: `Beoordeeld: alleen de ${scan.evaluatedCount ?? 0} publicatie(s) die dit profiel nog niet eerder ophaalde. De rest was al bekend.`,
+            text: `Beoordeeld: ${scan.evaluatedCount ?? 0} van de ${scan.totalFetched} opgehaalde publicatie(s), de publicaties die dit profiel nog niet eerder had beoordeeld.${
+              (scan.evaluatedCount ?? 0) < scan.totalFetched ? ' De rest is al eerder beoordeeld.' : ''
+            }`,
           })
         : el('p', {
             class: 'muted',
