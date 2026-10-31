@@ -87,7 +87,10 @@ export async function disableVault() {
   if (!vault) return;
   const sessionKey = await readSessionKey();
   if (!sessionKey) throw new Error('Ontgrendel de wachtwoordkluis eerst');
-  await saveSettings(parseVaultSecret(await decryptVault(vault, sessionKey)));
+  // De binding van de key aan de host blijft zoals hij was (S-16), ook als de
+  // Base-URL inmiddels een andere is.
+  const { directApiKeyHost } = await getSettings();
+  await saveSettings({ ...parseVaultSecret(await decryptVault(vault, sessionKey)), directApiKeyHost });
   await chrome.storage.local.remove(VAULT_STORAGE_KEY);
   await lock();
   log.info('Wachtwoordkluis opgeheven');

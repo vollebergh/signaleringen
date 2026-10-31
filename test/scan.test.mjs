@@ -109,17 +109,19 @@ globalThis.fetch = async (input, init = {}) => {
 
 // ── Modules pas na de nabootsing laden ─────────────────────────────────────
 
-const { AppConfig, DefaultSettings } = await import('../src/core/config.js');
+const { AppConfig, SuggestedConnection } = await import('../src/core/config.js');
 const { createProfile } = await import('../src/core/models.js');
 const { saveSettings } = await import('../src/data/settings-repository.js');
 const { saveProfile } = await import('../src/data/profile-repository.js');
 const { getScansForProfile, getPublicationsForScan, getSynthesis } = await import('../src/data/scan-repository.js');
-const { loadSeen, recordSeen, refreshSeen, pruneSeen, markSynthesised } = await import('../src/data/history-repository.js');
+const { loadSeen, recordSeen, refreshSeen, pruneSeen, markSynthesised, markJudged } = await import(
+  '../src/data/history-repository.js'
+);
 const { getUnread } = await import('../src/data/unread-repository.js');
 const { runScan, synthesizeScan } = await import('../src/background/scan-runner.js');
 const { Store, transaction } = await import('../src/data/db.js');
 
-await saveSettings({ directApiKey: 'sk-test' });
+await saveSettings({ ...SuggestedConnection, directApiKey: 'sk-test' });
 
 let feedCounter = 0;
 function feed(items, status = 200) {
@@ -405,6 +407,42 @@ test('refreshSeen en pruneSeen: weg na 180 dagen niet meer gezien, alleen voor d
   assert.equal(await pruneSeen('prune-a', later), 0);
 });
 
+test('markJudged: houdt een net ververste lastSeenAt vast (CR-26)', async () => {
+  const profileId = 'judged-profiel';
+  await recordSeen(profileId, 'scan-1', [{ key: 'url:lees', title: 'L', unjudged: true }]);
+  const before = (await loadSeen(profileId)).get('url:lees');
+  assert.equal(before.unjudged, true);
+
+  // Zoals executeScan: eerst verversen, dan het (oude) geheugenrecord markeren.
+  const later = Date.now() + 2 * 24 * HOUR;
+  assert.equal(await refreshSeen([before], later), 1);
+  assert.equal(await markJudged([before]), 1);
+
+  const after = (await loadSeen(profileId)).get('url:lees');
+  assert.equal(after.unjudged, undefined);
+  assert.equal(after.lastSeenAt, later, 'lastSeenAt van refreshSeen blijft staan');
+  assert.equal(await markJudged([before]), 0, 'tweede keer: niets meer te doen');
+});
+
+test('S-16: een nieuwe key wordt gebonden aan de Base-URL; alleen de URL veranderen houdt de binding', async () => {
+  const { getSettings } = await import('../src/data/settings-repository.js');
+  await saveSettings({ directBaseUrl: 'https://openrouter.ai/api/v1', directApiKey: 'sk-binding' });
+  assert.equal((await getSettings()).directApiKeyHost, 'openrouter.ai');
+
+  await saveSettings({ directBaseUrl: 'https://llm.example.org/v1', directApiKey: 'sk-binding' });
+  assert.equal((await getSettings()).directApiKeyHost, 'openrouter.ai', 'zelfde key: binding blijft');
+
+  await saveSettings({ directApiKey: 'sk-ander' });
+  assert.equal((await getSettings()).directApiKeyHost, 'llm.example.org', 'nieuwe key: nieuwe binding');
+
+  // Key opgeslagen zonder Base-URL, daarna het eerste adres: daaraan binden.
+  await saveSettings({ directBaseUrl: '', directApiKey: 'sk-eerst', directApiKeyHost: '' });
+  await saveSettings({ directBaseUrl: 'https://api.openai.com/v1' });
+  assert.equal((await getSettings()).directApiKeyHost, 'api.openai.com');
+
+  await saveSettings({ ...SuggestedConnection, directApiKey: 'sk-test' });
+});
+
 // ── Vault en instellingen samen (CR-16 splitst ze) ────────────────────────
 
 test('vault: aanzetten, vergrendelen, ontgrendelen en opheffen', async () => {
@@ -413,8 +451,10 @@ test('vault: aanzetten, vergrendelen, ontgrendelen en opheffen', async () => {
     '../src/data/vault-repository.js'
   );
   await saveSettings({ directApiKey: 'sk-vault' });
+  const boundTo = (await getSettings()).directApiKeyHost;
 
   await enableVault('lange wachtwoordzin');
+  assert.equal((await getSettings()).directApiKeyHost, boundTo, 'binding blijft als de key in de kluis gaat');
   const stored = await getSettings();
   assert.equal(stored.directApiKey, '', 'key niet meer leesbaar in de instellingen');
   assert.equal(await isConfigured(stored), true, 'een vault telt als geconfigureerd');
@@ -425,8 +465,13 @@ test('vault: aanzetten, vergrendelen, ontgrendelen en opheffen', async () => {
   await assert.rejects(withApiKey(stored), VaultLockedError);
 
   await unlock('lange wachtwoordzin');
+  // Kluis opheffen terwijl de Base-URL inmiddels elders heen wijst: de key
+  // blijft aan de oorspronkelijke host gebonden (S-16).
+  await saveSettings({ directBaseUrl: 'https://llm.example.org/v1' });
   await disableVault();
   assert.equal((await getSettings()).directApiKey, 'sk-vault');
+  assert.equal((await getSettings()).directApiKeyHost, boundTo, 'opheffen bindt niet opnieuw');
+  await saveSettings({ directBaseUrl: SuggestedConnection.directBaseUrl });
   assert.equal((await getVaultStatus()).exists, false);
   await saveSettings({ directApiKey: 'sk-test' });
 });
@@ -451,7 +496,7 @@ test('planner: een vergrendelde vault houdt een lokaal model niet tegen, OpenRou
     assert.equal(outcome.ran, 1);
     assert.equal((await getScansForProfile(profile.id)).length, 1);
   } finally {
-    await saveSettings({ autoScanEnabled: false, directBaseUrl: DefaultSettings.directBaseUrl, model: DefaultSettings.model });
+    await saveSettings({ autoScanEnabled: false, directBaseUrl: SuggestedConnection.directBaseUrl, model: SuggestedConnection.model });
     await unlock('lange wachtwoordzin');
     await disableVault();
     await saveSettings({ directApiKey: 'sk-test' });

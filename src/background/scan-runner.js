@@ -582,6 +582,8 @@ async function judge(profileId, toJudge, prefiltered, profile, settings) {
         },
       })),
     );
+  // Geen oordeel van het model (fout of afgekapt antwoord); niet te verwarren
+  // met `unjudged` uit de leesmodus, die bewust niet beoordeeld is (CR-29).
   const unjudgedCount = verdicts.filter((verdict) => !verdict.isJudged).length;
   if (unjudgedCount > 0) {
     log.warn(`${unjudgedCount} publicatie(s) zonder oordeel; de volgende scan biedt ze opnieuw aan`);

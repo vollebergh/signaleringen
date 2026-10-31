@@ -31,18 +31,22 @@ verdwijnt bij het afsluiten van Firefox. Verschillen met Edge:
 ## Eerste configuratie (technisch)
 
 1. Open het dashboard (pictogram → **Dashboard**, of via `edge://extensions` → Opties)
-2. **Instellingen** → route op *Eigen API-key in deze browser*, plak je
-   OpenRouter-key en sla op. Voor `openrouter.ai` is geen host-toestemming
-   nodig: de API staat verzoeken vanuit de browser toe (CORS).
-3. **Model** en **Routing** staan vooringevuld: `deepseek/deepseek-v4-flash-0731`
-   bij `deepinfra`. De uitwijk is sinds 0.24.0 optioneel en staat uit; de
+2. **Instellingen** → route op *Eigen API-key in deze browser*, Base-URL
+   (`https://openrouter.ai/api/v1`), je OpenRouter-key, en sla op. Voor
+   `openrouter.ai` is geen host-toestemming nodig: de API staat verzoeken
+   vanuit de browser toe (CORS).
+3. **Model** en **Routing** zijn sinds 0.25.6 leeg; de velden tonen
+   `deepseek/deepseek-v4-flash-0731` bij `deepinfra` als voorbeeld
+   (`SuggestedConnection` in `core/config.js`). Zonder Base-URL of model werkt
+   de extensie als feedlezer (leesmodus). De uitwijk is sinds 0.24.0 optioneel en staat uit; de
    vroegere waarden (`deepseek/deepseek-v4.1-flash` bij `decart/fp4`, samen
    gelijk aan de preset `@preset/signaleringen`) staan als voorbeeld in de velden. Routing vul je
    in als `provider` of `provider/kwantisatie`, in volgorde van voorkeur,
    komma-gescheiden — dezelfde tags als op de endpoints-pagina van een model
    bij OpenRouter. Een preset als model kan ook; dan geldt het routingveld niet.
-4. **Verbinding testen** en **Uitwijkroute testen** — horen `ok` terug te
-   geven, met de provider die antwoordde. Testen slaat eerst op.
+4. **Verbinding testen** (onderaan) en **Uitwijkroute testen** (onder de
+   velden van de uitwijkroute, alleen zichtbaar als die aanstaat) — horen
+   `ok` terug te geven, met de provider die antwoordde. Testen slaat eerst op.
 5. **Profielen** → *Nieuw profiel*: naam, onderwerpomschrijving, eventueel een
    eigen instructie voor de signalering, en één of meer bronnen.
 6. Per bron **Testen**; de browser vraagt bij de eerste test toestemming voor
@@ -54,8 +58,16 @@ Maak naast `manifest.json` een bestand `local-settings.json` (voorbeeld:
 `local-settings.example.json`) met je eigen key:
 
 ```json
-{ "directApiKey": "sk-or-…" }
+{
+  "directBaseUrl": "https://openrouter.ai/api/v1",
+  "model": "deepseek/deepseek-v4-flash-0731",
+  "directApiKey": "sk-or-…",
+  "directApiKeyHost": "openrouter.ai"
+}
 ```
+
+`directApiKeyHost` is nodig sinds 0.26.0: de key gaat alleen naar die host
+(S-16). Een bestaande installatie krijgt de binding bij de update vanzelf.
 
 Het key-veld bij Instellingen staat dan vooringevuld, zolang er nog geen key
 is opgeslagen — een opgeslagen waarde gaat altijd voor. Het bestand staat in
@@ -150,6 +162,15 @@ wachtwoordkluis) en IndexedDB (profielen, scans) staan; `chrome.storage.session`
 gewist. Een gebruiker met een wachtwoordkluis moet na elke update dus opnieuw
 ontgrendelen (staat in de README), maar mag zijn key nooit kwijtraken.
 
+**Standaardwaarden veranderen is ook een migratie.** `saveSettings` bewaart
+alleen afwijkingen van de standaard (CR-03). Wie de oude standaard gebruikte,
+heeft dat veld dus niet opgeslagen en krijgt na de update de nieuwe. Sinds
+0.25.6 zijn Base-URL, model en routing leeg; `migrateConnectionDefaults`
+(`data/settings-repository.js`) zet bij een update vanaf een eerdere versie de
+oude waarden vast, alleen voor een installatie met opgeslagen instellingen, een
+wachtwoordkluis of een key in `local-settings.json`. Getest in
+`test/upgrade.test.mjs` en `test/migration-local.test.mjs`.
+
 **Procescontrole:** `test/upgrade.test.mjs` zet wachtwoordkluizen uit oudere versies
 (`test/fixtures/vault-formats.json`) in een opslag zoals na een update en
 controleert dat de huidige code ze vergrendeld vindt, met de wachtwoordzin
@@ -212,6 +233,18 @@ Twee routes, in te stellen bij Instellingen:
 | **Eigen API-key in deze browser** (standaard) | Iedere gebruiker heeft een eigen key op eigen naam (B-D09) | Zonder wachtwoordkluis staat de key onversleuteld in `chrome.storage.local` en gaat mee in backups en profielsynchronisatie. Aanvaardbaar bij een persoonlijke key met uitgavenlimiet |
 | **Via een eigen proxy** | Eén key voor meerdere mensen | De key staat server-side; de extensie kent hem niet |
 
+**De key hoort bij één host (S-16, sinds 0.26.0).** Bij het opslaan van een
+nieuwe key legt de extensie de host van de Base-URL vast
+(`directApiKeyHost`). `resolveEndpoint` stuurt de key alleen naar die host;
+wijst de Base-URL ergens anders heen, dan volgt een fout met uitleg, en bij
+een lokaal model gaat het verzoek zonder key. Ook de voorfilter krijgt de key
+van het taalmodel alleen als die bij de Base-URL hoort. Instellingen toont
+een waarschuwing zodra Base-URL en key niet bij elkaar horen. Alleen de
+Base-URL veranderen houdt de binding; een nieuwe key bindt opnieuw; het
+opheffen van de wachtwoordkluis laat de binding staan. Bestaande installaties
+worden bij de update gebonden aan de host van hun Base-URL
+(`migrateKeyHost`).
+
 Een gedeelde key hoort nooit in de `direct`-route: wie het pakket of het
 browserprofiel heeft, leest hem uit.
 
@@ -225,10 +258,15 @@ backups en synchronisatie; **niet** tegen code die draait terwijl hij
 ontgrendeld is. Een vergeten wachtwoordzin is niet te herstellen: hef de wachtwoordkluis
 dan op door de extensiedata te wissen en vul de key opnieuw in.
 
-Zit de wachtwoordkluis op slot terwijl de key nodig is, dan staat er een 🔒
-op het extensiepictogram (`isKeyLocked` in `data/vault-repository.js`,
-`updateBadge` in `background/badge.js`; de badge wordt bijgewerkt na elke
-slotwijziging en bij het starten van de browser).
+Zit de wachtwoordkluis op slot terwijl de key nodig is, dan krijgt het
+extensiepictogram zelf een slotje (`isKeyLocked` in `data/vault-repository.js`,
+`updateBadge` in `background/badge.js`, getekend in `background/lock-icon.js`
+met `OffscreenCanvas`, zonder rand of achtergrond; kleuren en grootte in
+`AppConfig.LOCK_ICON_COLOR`, `LOCK_ICON_KEYHOLE_COLOR` en `LOCK_ICON_SCALE`). De teller voor ongelezen
+signaleringen blijft daarnaast in de badge. Bijgewerkt na elke slotwijziging
+en bij het starten van de browser. Ontgrendelen kan in de popup zelf (`unlockCard` in
+`ui/popup/popup.js`): een formulier met `autocomplete="current-password"` en
+een verborgen gebruikersnaam, zodat een wachtwoordmanager kan invullen.
 
 **Naamgeving.** Voor gebruikers heet dit *wachtwoordkluis*. In de code blijft
 het `vault` (`core/vault.js`, `data/vault-repository.js`, `Msg.VAULT_*`,
@@ -543,7 +581,7 @@ taalmodel een melding in plaats van een blokkade. Tests: *leesmodus* en
 ## Aanbieders en endpoints
 
 Welke velden een verzoek krijgt, volgt uit de Base-URL (`core/api-kind.js`,
-B-79); de keuze *Aanbieder* in Instellingen vult alleen de Base-URL in.
+B-79). Een aparte keuze voor de aanbieder is er sinds 0.25.6 niet meer.
 
 | Soort | Herkend aan | Verzoek |
 | --- | --- | --- |

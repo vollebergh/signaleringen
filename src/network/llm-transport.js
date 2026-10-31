@@ -12,7 +12,7 @@
 
 import { AppConfig } from '../core/config.js';
 import { isLocalBaseUrl } from '../core/models.js';
-import { ApiKind, apiKind, supportsOpenRouterFeatures } from '../core/api-kind.js';
+import { ApiKind, apiKind, hasEndpoint, keyBelongsToBaseUrl, keyHostMessage, supportsOpenRouterFeatures } from '../core/api-kind.js';
 import { log } from '../core/logger.js';
 import { connectionErrors, parseList } from '../core/routing.js';
 import { fetchBytes, utf8, isTransientStatus } from './http.js';
@@ -44,7 +44,14 @@ function resolveEndpoint(settings) {
 
   const base = settings.directBaseUrl.trim().replace(/\/+$/, '');
   const headers = { 'Content-Type': 'application/json' };
-  const key = settings.directApiKey?.trim();
+  let key = settings.directApiKey?.trim();
+
+  // De key gaat alleen naar de host waarvoor hij is ingevuld (S-16). Een lokaal
+  // model werkt zonder key: dan gewoon zonder; elders een duidelijke fout.
+  if (key && !keyBelongsToBaseUrl(settings)) {
+    if (!isLocalBaseUrl(settings.directBaseUrl)) throw new Error(keyHostMessage(settings));
+    key = '';
+  }
 
   // De Claude API heeft een eigen route en eigen headers (B-79). De laatste
   // header is nodig omdat het verzoek uit een browser(extensie) komt.
@@ -347,6 +354,15 @@ export function emptyContentMessage(choice, parsed) {
  * @returns {Promise<{reply: string, provider: string | null, model: string}>}
  */
 export async function testConnection(settings, which = 'primary') {
+  // Sinds 0.25.6 zijn adres en model standaard leeg; zonder deze check geeft
+  // een test een verwarrende netwerkfout op "/chat/completions" (CR-34).
+  if (!hasEndpoint(settings) || !String(settings.model ?? '').trim()) {
+    throw new Error(
+      settings.transport === 'proxy'
+        ? 'Vul eerst het proxy-adres en een model in.'
+        : 'Vul eerst een Base-URL en een model in.',
+    );
+  }
   const routes = routesFor(settings);
   const route = which === 'fallback' ? routes[1] : routes[0];
   if (!route) throw new Error('De uitwijkroute staat uit');

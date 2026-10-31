@@ -27,7 +27,10 @@ import { validateSourceUrl, createProfile } from '../src/core/models.js';
 import { assertValidBundle, exportFilename } from '../src/data/transfer-repository.js';
 import { isDue } from '../src/background/scheduler.js';
 import { formatInterval } from '../src/ui/dashboard/views/profiles.js';
-import { AppConfig, DefaultSettings } from '../src/core/config.js';
+import { AppConfig, DefaultSettings, SuggestedConnection } from '../src/core/config.js';
+// Sinds 0.25.6 zijn Base-URL, model en routing standaard leeg; de tests gaan uit
+// van een ingestelde verbinding met OpenRouter.
+const Connected = { ...DefaultSettings, ...SuggestedConnection, directApiKeyHost: 'openrouter.ai' };
 import { mergeSettings } from '../src/data/settings-repository.js';
 
 test('decodeEntities vertaalt named, decimale en hexadecimale entities', () => {
@@ -283,9 +286,9 @@ test('mergeSettings: lokaal bestand vult de key voor, opgeslagen waarde wint', (
 });
 
 test('mergeSettings: onbekende sleutels en lege waarden uit het lokale bestand tellen niet', () => {
-  const merged = mergeSettings(DefaultSettings, { onzin: 1, model: '' }, undefined);
+  const merged = mergeSettings(Connected, { onzin: 1, model: '' }, undefined);
   assert.equal('onzin' in merged, false);
-  assert.equal(merged.model, DefaultSettings.model);
+  assert.equal(merged.model, Connected.model);
 });
 
 // ── open.overheid.nl (B-57) ──────────────────────────────────────────────────
@@ -444,15 +447,15 @@ import { validateRouting, parseList } from '../src/core/routing.js';
 // Sinds 0.24.0 staat de uitwijk standaard uit en leeg; de tests zetten de
 // vroegere waarden zelf.
 const WithFallback = {
-  ...DefaultSettings,
+  ...Connected,
   fallbackEnabled: true,
   fallbackModel: 'deepseek/deepseek-v4.1-flash',
   fallbackProviderRouting: 'decart/fp4',
 };
 
 test('routesFor: standaard alleen de primaire route; de uitwijk is optioneel', () => {
-  assert.equal(DefaultSettings.fallbackEnabled, false);
-  assert.equal(routesFor(DefaultSettings).length, 1);
+  assert.equal(Connected.fallbackEnabled, false);
+  assert.equal(routesFor(Connected).length, 1);
 });
 
 test('routesFor: standaard model bij DeepInfra met uitwijk naar decart/fp4; preset zonder provider-blok', () => {
@@ -466,7 +469,7 @@ test('routesFor: standaard model bij DeepInfra met uitwijk naar decart/fp4; pres
   const preset = routesFor({ ...WithFallback, model: '@preset/signaleringen' });
   assert.equal(preset[0].provider, null);
 
-  const own = routesFor({ ...DefaultSettings, providerRouting: ' DeepInfra/FP8, novita ', fallbackEnabled: false });
+  const own = routesFor({ ...Connected, providerRouting: ' DeepInfra/FP8, novita ', fallbackEnabled: false });
   assert.equal(own.length, 1);
   assert.deepEqual(own[0].provider, { order: ['deepinfra/fp8', 'novita'], allow_fallbacks: false });
 
@@ -476,8 +479,8 @@ test('routesFor: standaard model bij DeepInfra met uitwijk naar decart/fp4; pres
 });
 
 test('validateRouting: provider of provider/kwantisatie; uitwijk zonder model', () => {
-  assert.deepEqual(validateRouting(DefaultSettings), []);
-  assert.deepEqual(validateRouting({ ...DefaultSettings, providerRouting: 'deepinfra/fp8, decart/fp4, novita' }), []);
+  assert.deepEqual(validateRouting(Connected), []);
+  assert.deepEqual(validateRouting({ ...Connected, providerRouting: 'deepinfra/fp8, decart/fp4, novita' }), []);
   const errors = validateRouting({
     ...WithFallback,
     providerRouting: 'deepinfra/fp5, deep!infra, a/fp8/x',
@@ -485,8 +488,8 @@ test('validateRouting: provider of provider/kwantisatie; uitwijk zonder model', 
   });
   assert.equal(errors.length, 4);
   assert.match(errors[0], /fp5/);
-  assert.deepEqual(validateRouting({ ...DefaultSettings, fallbackEnabled: false, fallbackModel: '' }), []);
-  assert.equal(validateRouting({ ...DefaultSettings, model: ' ' }).length, 1);
+  assert.deepEqual(validateRouting({ ...Connected, fallbackEnabled: false, fallbackModel: '' }), []);
+  assert.equal(validateRouting({ ...Connected, model: ' ' }).length, 1);
   assert.deepEqual(parseList('a, B  c,,'), ['a', 'b', 'c']);
 });
 
@@ -577,7 +580,7 @@ const PrefilterFields = {
   prefilterProviderRouting: 'typesafe',
 };
 const directSettings = {
-  ...DefaultSettings,
+  ...Connected,
   ...PrefilterFields,
   transport: 'direct',
   directBaseUrl: 'https://openrouter.ai/api/v1/',
@@ -617,8 +620,8 @@ const answerWith = (nouls) => (body, call) => {
 };
 
 test('isPrefilterActive: vinkje, endpoint, model en een key; via proxy alleen met eigen key', () => {
-  assert.equal(DefaultSettings.jevPrefilterEnabled, false);
-  assert.equal(isPrefilterActive(DefaultSettings), false);
+  assert.equal(Connected.jevPrefilterEnabled, false);
+  assert.equal(isPrefilterActive(Connected), false);
   assert.equal(isPrefilterActive(directSettings), true);
   assert.equal(isPrefilterActive({ ...directSettings, transport: 'proxy' }), false);
   assert.equal(isPrefilterActive({ ...directSettings, transport: 'proxy', prefilterApiKey: 'sk-jev' }), true);
@@ -636,13 +639,13 @@ test('prefilterConnection: eigen key gaat voor, anders die van het taalmodel; ro
 });
 
 test('validateRouting: voorfilter-velden alleen als het vinkje aan staat', () => {
-  assert.deepEqual(validateRouting({ ...DefaultSettings, prefilterEndpoint: 'x' }), []);
-  const errors = validateRouting({ ...DefaultSettings, jevPrefilterEnabled: true, prefilterEndpoint: 'http://a', prefilterModel: '', prefilterProviderRouting: 'typesafe/fp5' });
+  assert.deepEqual(validateRouting({ ...Connected, prefilterEndpoint: 'x' }), []);
+  const errors = validateRouting({ ...Connected, jevPrefilterEnabled: true, prefilterEndpoint: 'http://a', prefilterModel: '', prefilterProviderRouting: 'typesafe/fp5' });
   assert.equal(errors.length, 3);
-  assert.deepEqual(validateRouting({ ...DefaultSettings, ...PrefilterFields, jevPrefilterEnabled: true }), []);
-  assert.ok(validateRouting({ ...DefaultSettings, jevPrefilterEnabled: true }).length > 0, 'aan zonder velden: melding');
-  assert.equal(DefaultSettings.prefilterEndpoint, '', 'niets vooringevuld');
-  assert.equal(DefaultSettings.prefilterModel, '');
+  assert.deepEqual(validateRouting({ ...Connected, ...PrefilterFields, jevPrefilterEnabled: true }), []);
+  assert.ok(validateRouting({ ...Connected, jevPrefilterEnabled: true }).length > 0, 'aan zonder velden: melding');
+  assert.equal(Connected.prefilterEndpoint, '', 'niets vooringevuld');
+  assert.equal(Connected.prefilterModel, '');
 });
 
 test('buildDecisionsRequest: publicaties in state, vraag letterlijk in de noul, tekst van derden niet', () => {
@@ -850,7 +853,7 @@ test('selectForSynthesis: hoogste score eerst, bij gelijke score de nieuwste, be
 });
 
 test('normalizeSynthesisMaxArticles: standaard 25, hele getallen, geen bovengrens', () => {
-  assert.equal(DefaultSettings.synthesisMaxArticles, 25);
+  assert.equal(Connected.synthesisMaxArticles, 25);
   assert.equal(normalizeSynthesisMaxArticles(undefined), 25);
   assert.equal(normalizeSynthesisMaxArticles(''), 25);
   assert.equal(normalizeSynthesisMaxArticles('0'), 25);

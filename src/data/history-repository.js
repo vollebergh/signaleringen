@@ -92,14 +92,23 @@ export async function recordSeen(profileId, scanId, entries, existing = null) {
 
 /**
  * Haalt de markering "nog niet beoordeeld" weg (B-82): het model heeft deze
- * publicaties nu beoordeeld.
+ * publicaties nu beoordeeld. Leest elk record vers, zoals `markSynthesised`:
+ * het meegegeven record kan verouderd zijn, want `refreshSeen` schrijft een
+ * kopie met een nieuwe `lastSeenAt` weg (CR-26).
  * @param {object[]} records seen-records met `unjudged: true`
  */
 export async function markJudged(records) {
-  const pending = records.filter((record) => record?.unjudged);
+  const pending = [];
+  for (const { id } of records.filter((record) => record?.unjudged)) {
+    const current = await getByKey(Store.SEEN, id);
+    if (current?.unjudged) {
+      const { unjudged, ...record } = current;
+      pending.push(record);
+    }
+  }
   if (pending.length === 0) return 0;
   await transaction(Store.SEEN, 'readwrite', (store) => {
-    pending.forEach(({ unjudged, ...record }) => store.put(record));
+    pending.forEach((record) => store.put(record));
   });
   return pending.length;
 }

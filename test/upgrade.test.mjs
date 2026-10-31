@@ -78,3 +78,70 @@ test('update: de opslagsleutel van de vault is niet veranderd', async () => {
   const { VAULT_STORAGE_KEY } = await import('../src/data/settings-repository.js');
   assert.equal(VAULT_STORAGE_KEY, 'vault', 'een andere sleutel laat bestaande vaults onvindbaar achter');
 });
+
+// ── 0.25.6: Base-URL, model en routing standaard leeg ────────────────────────
+
+const { migrateConnectionDefaults, isConfigured, versionBefore, CONNECTION_DEFAULTS_EMPTIED_IN } = await import(
+  '../src/data/settings-repository.js'
+);
+const { SuggestedConnection } = await import('../src/core/config.js');
+
+for (const c of fixture.cases) {
+  test(`update naar ${CONNECTION_DEFAULTS_EMPTIED_IN}: vault ${c.name} houdt zijn verbinding met OpenRouter`, async () => {
+    afterUpdate(c.storageLocal);
+    await migrateConnectionDefaults();
+    const settings = await getSettings();
+    for (const [field, value] of Object.entries(SuggestedConnection)) assert.equal(settings[field], value, field);
+    assert.equal(await isConfigured(settings), true, 'geen terugval naar leesmodus');
+    assert.deepEqual(await migrateConnectionDefaults(), [], 'tweede keer: niets te doen');
+  });
+}
+
+test(`update naar ${CONNECTION_DEFAULTS_EMPTIED_IN}: eigen waarden blijven, een verse installatie blijft leeg`, async () => {
+  afterUpdate({ settings: { directBaseUrl: 'https://api.anthropic.com/v1', model: 'claude-haiku-5-5', directApiKey: 'sk-ant' } });
+  assert.deepEqual(await migrateConnectionDefaults(), ['providerRouting']);
+  const settings = await getSettings();
+  assert.equal(settings.directBaseUrl, 'https://api.anthropic.com/v1');
+  assert.equal(settings.model, 'claude-haiku-5-5');
+
+  afterUpdate({});
+  assert.deepEqual(await migrateConnectionDefaults(), []);
+  assert.equal((await getSettings()).directBaseUrl, '');
+});
+
+test('versionBefore: alleen updates van vóór 0.25.6 krijgen de migratie', () => {
+  assert.equal(versionBefore('0.25.5', '0.25.6'), true);
+  assert.equal(versionBefore('0.9.0', '0.25.6'), true);
+  assert.equal(versionBefore('0.25.6', '0.25.6'), false);
+  assert.equal(versionBefore('0.26.0', '0.25.6'), false);
+  assert.equal(versionBefore('1.0', '0.25.6'), false);
+});
+
+// ── 0.26.0: de key gebonden aan de host van de Base-URL (S-16) ───────────────
+
+const { migrateKeyHost, KEY_HOST_BOUND_IN } = await import('../src/data/settings-repository.js');
+
+for (const c of fixture.cases) {
+  test(`update naar ${KEY_HOST_BOUND_IN}: kluis ${c.name} wordt aan openrouter.ai gebonden`, async () => {
+    afterUpdate(c.storageLocal);
+    await migrateConnectionDefaults();
+    assert.equal(await migrateKeyHost(), 'openrouter.ai');
+    await unlock(fixture.passphrase);
+    const settings = await withApiKey(await getSettings());
+    assert.equal(settings.directApiKeyHost, 'openrouter.ai');
+    assert.equal(settings.directApiKey, c.expected.directApiKey);
+    assert.equal(await migrateKeyHost(), '', 'tweede keer: niets te doen');
+  });
+}
+
+test(`update naar ${KEY_HOST_BOUND_IN}: eigen aanbieder, al gebonden, of geen key`, async () => {
+  afterUpdate({ settings: { directBaseUrl: 'https://api.anthropic.com/v1', model: 'claude-haiku-5-5', directApiKey: 'sk-ant' } });
+  assert.equal(await migrateKeyHost(), 'api.anthropic.com');
+
+  afterUpdate({ settings: { ...SuggestedConnection, directApiKey: 'sk', directApiKeyHost: 'api.openai.com' } });
+  assert.equal(await migrateKeyHost(), '', 'een vastgelegde host blijft staan');
+  assert.equal((await getSettings()).directApiKeyHost, 'api.openai.com');
+
+  afterUpdate({ settings: { ...SuggestedConnection } });
+  assert.equal(await migrateKeyHost(), '', 'zonder key niets te binden');
+});

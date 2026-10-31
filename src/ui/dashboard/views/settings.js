@@ -10,9 +10,9 @@ import { Msg, send } from '../../../core/messages.js';
 import { el, clear, labelRow } from '../../shared/dom.js';
 import { originPattern } from '../../../core/origins.js';
 import { QUANTIZATIONS, validateRouting } from '../../../core/routing.js';
-import { DefaultSettings } from '../../../core/config.js';
-import { normalizeSynthesisMaxArticles } from '../../../core/models.js';
-import { ApiKind, KnownProviders, apiKind, apiKindOfUrl } from '../../../core/api-kind.js';
+import { DefaultSettings, SuggestedConnection } from '../../../core/config.js';
+import { normalizeSynthesisMaxArticles, isLocalBaseUrl } from '../../../core/models.js';
+import { ApiKind, apiKind, hostOf, routingFieldsApply } from '../../../core/api-kind.js';
 
 export async function renderSettings() {
   const [settings, vault] = await Promise.all([send(Msg.GET_SETTINGS), send(Msg.VAULT_STATUS)]);
@@ -39,57 +39,50 @@ export async function renderSettings() {
   });
 
   proxyFields.append(
-    field('Proxy-adres', proxyUrl, 'Bijv. https://hp-mini.tailnet.ts.net/signaleringen — de extensie voegt zelf /chat/completions toe.'),
+    field('Proxy-adres', proxyUrl, 'Bijv. https://proxy.example.org/signaleringen — de extensie voegt zelf /chat/completions toe.'),
     field('Proxy-token (optioneel)', proxyToken, 'Gedeeld token om de proxy af te schermen. Dit is géén provider-key.'),
   );
 
   const directBaseUrl = input('url', draft.directBaseUrl, (v) => {
     draft.directBaseUrl = v;
-    providerSelect.value = apiKindOfUrl(v);
     syncRouting();
+    syncKeyHost();
   });
 
-  // Aanbieder (B-79): vult de Base-URL in. Welke velden er meegaan, volgt uit
-  // de Base-URL zelf (core/api-kind.js), niet uit deze keuze.
-  const providerSelect = el(
-    'select',
-    {},
-    Object.entries(KnownProviders).map(([value, { label }]) => el('option', { value, text: label })),
-  );
-  providerSelect.value = apiKindOfUrl(draft.directBaseUrl);
-  providerSelect.addEventListener('change', () => {
-    const kind = providerSelect.value;
-    const known = KnownProviders[kind];
-    if (known.baseUrl) {
-      draft.directBaseUrl = known.baseUrl;
-      directBaseUrl.value = known.baseUrl;
-    }
-    // Een model van de vorige aanbieder werkt bij de nieuwe niet: voorstel of leeg.
-    if (kind !== ApiKind.OPENROUTER && String(draft.model ?? '').includes('/')) {
-      draft.model = known.model ?? '';
-      modelInput.value = draft.model;
-    } else if (kind === ApiKind.OPENROUTER && !String(draft.model ?? '').includes('/')) {
-      draft.model = DefaultSettings.model;
-      modelInput.value = draft.model;
-    }
-    syncRouting();
-  });
+  // De opgeslagen key hoort bij één host (S-16). Wijst de Base-URL ergens
+  // anders heen, dan gaat hij niet mee: dat zeggen we hier vooraf.
+  const keyHostHint = el('p', { class: 'error' });
+  function syncKeyHost() {
+    const host = hostOf(draft.directBaseUrl);
+    const keyHost = String(settings.directApiKeyHost ?? '');
+    const savedKey = vault.exists || (Boolean(draft.directApiKey?.trim()) && draft.directApiKey === settings.directApiKey);
+    const mismatch = savedKey && Boolean(host) && host !== keyHost && !isLocalBaseUrl(draft.directBaseUrl);
+    keyHostHint.textContent = mismatch
+      ? keyHost
+        ? `De opgeslagen API-key hoort bij ${keyHost} en gaat niet mee naar ${host}. Vul een key in voor ${host}${vault.exists ? ' (hef daarvoor eerst de wachtwoordkluis op)' : ''}.`
+        : `Onbekend bij welk adres de opgeslagen API-key hoort. Vul de key opnieuw in en sla op.`
+      : '';
+    keyHostHint.style.display = mismatch ? '' : 'none';
+  }
+  directBaseUrl.placeholder = `bijv. ${SuggestedConnection.directBaseUrl}`;
   const directApiKey = input('password', draft.directApiKey, (v) => {
     draft.directApiKey = v;
+    syncKeyHost();
   });
 
   directFields.append(
-    field('Aanbieder', providerSelect, 'Vult de Base-URL in. Een abonnement (Claude, ChatGPT) geeft geen API-toegang: je hebt een API-key nodig uit de ontwikkelaarsconsole van de aanbieder.'),
     field(
       'Base-URL',
       directBaseUrl,
-      'Het adres van de API. Standaard https://openrouter.ai/api/v1. Elk OpenAI-compatibel endpoint werkt; voor de Claude API https://api.anthropic.com/v1. Een lokaal model kan ook, bijv. Ollama op http://localhost:11434/v1. Zie Uitleg.',
+      'Het adres van de API, bijv. https://openrouter.ai/api/v1. Elk OpenAI-compatibel endpoint werkt; voor de Claude API https://api.anthropic.com/v1. Een lokaal model kan ook, bijv. Ollama op http://localhost:11434/v1. Leeg: geen taalmodel, de extensie werkt dan als feedlezer. Een abonnement (Claude, ChatGPT) geeft geen API-toegang: je hebt een API-key uit de ontwikkelaarsconsole van de aanbieder nodig. Zie Uitleg.',
     ),
     vault.exists
       ? null
-      : field('API-key', directApiKey, 'Je persoonlijke API-key van de aanbieder hierboven. Een lokaal model heeft geen key nodig. Versleutel de key hieronder met een wachtwoordzin.'),
+      : field('API-key', directApiKey, 'Je persoonlijke API-key van de aanbieder van de Base-URL. Een lokaal model heeft geen key nodig. Versleutel de key hieronder met een wachtwoordzin.'),
+    keyHostHint,
     vaultSection(vault, draft),
   );
+  syncKeyHost();
 
   // ── Voorfilter (B-58) ─────────────────────────────────────────────────────
   // Eigen verbinding: endpoint, key, model en routing, zodat een gebruiker in
@@ -141,7 +134,7 @@ export async function renderSettings() {
       'Het beslismodel, bijv. ~typesafe/jev-latest. Een vaste versie (typesafe/jev-1.13-20260917) is stabieler: de drempel is op versie 1.13 afgesteld.',
     ),
     field('Aanbieder (provider-routing)', prefilterRouting, 'Zelfde vorm als bij het taalmodel, bijv. typesafe. Jev draait alleen bij TypeSafe.'),
-    el('div', { class: 'hint', text: 'Alle vier de velden vul je zelf in; zonder endpoint, model en key slaat de extensie de voorfilter over.' }),
+    el('div', { class: 'hint', text: 'Endpoint en model vul je zelf in. Zonder eigen key gaat de key van het taalmodel alleen mee als het endpoint op dezelfde host staat; anders slaat de extensie de voorfilter over.' }),
     el('div', { class: 'actions' }, [
       el('button', { text: 'Voorfilter testen', onclick: (e) => testPrefilterRoute(e.currentTarget) }),
       prefilterStatus,
@@ -177,7 +170,7 @@ export async function renderSettings() {
         prefilterCheckbox,
         el('span', { text: 'Voorfilter met een beslismodel vóór de relevantiestap' }),
       ]),
-      'Snellere filtering bij profielen met veel bronnen: een beslismodel (standaard Jev van TypeSafe) zeeft de te beoordelen publicaties eerst ruim, en alleen wat overblijft beoordeelt het taalmodel. Bij vervolgscans met weinig nieuwe publicaties scheelt het weinig. Lukt de voorfilter niet, dan gaat alles gewoon naar het taalmodel.',
+      'Snellere filtering bij profielen met veel bronnen: een beslismodel (bijvoorbeeld Jev van TypeSafe) zeeft de te beoordelen publicaties eerst ruim, en alleen wat overblijft beoordeelt het taalmodel. Bij vervolgscans met weinig nieuwe publicaties scheelt het weinig. Lukt de voorfilter niet, dan gaat alles gewoon naar het taalmodel.',
     ),
     // De privacywaarschuwing blijft zichtbaar: die hoort niet achter een hover.
     el('div', {
@@ -203,6 +196,7 @@ export async function renderSettings() {
     draft.model = v;
     syncRouting();
   });
+  modelInput.placeholder = `bijv. ${SuggestedConnection.model}`;
 
   // ── Routing en uitwijkroute (B-61, B-D13) ─────────────────────────────────
   // Eén veld per route: providers in volgorde, elk eventueel met kwantisatie
@@ -211,7 +205,7 @@ export async function renderSettings() {
   const providerRouting = input('text', draft.providerRouting, (v) => {
     draft.providerRouting = v;
   });
-  providerRouting.placeholder = 'bijv. deepinfra/fp8';
+  providerRouting.placeholder = `bijv. ${SuggestedConnection.providerRouting}`;
   const presetRoutingHint = el('div', {
     class: 'hint',
     text: 'Je gebruikt een preset: die bepaalt zelf de provider, dit veld geldt dan niet.',
@@ -228,9 +222,16 @@ export async function renderSettings() {
     draft.fallbackProviderRouting = v;
   });
   fallbackProviderRouting.placeholder = 'bijv. decart/fp4';
+  // Testknop bij de velden zelf, met een eigen statusregel: zichtbaar zodra
+  // de uitwijkroute aanstaat, net als de velden.
+  const fallbackStatus = el('span', { class: 'muted' });
   const fallbackFields = el('div', {}, [
     field('Model voor de uitwijk', fallbackModel),
     field('Provider-routing voor de uitwijk', fallbackProviderRouting, 'Zelfde vorm als hierboven.'),
+    el('div', { class: 'actions' }, [
+      el('button', { text: 'Uitwijkroute testen', onclick: (e) => test(e.currentTarget, 'fallback', fallbackStatus) }),
+      fallbackStatus,
+    ]),
   ]);
   fallbackCheckbox.addEventListener('change', () => {
     draft.fallbackEnabled = fallbackCheckbox.checked;
@@ -248,7 +249,8 @@ export async function renderSettings() {
     providerRouting.disabled = preset;
     presetRoutingHint.style.display = preset ? '' : 'none';
     fallbackFields.style.display = draft.fallbackEnabled ? '' : 'none';
-    const openRouter = apiKind(draft) === ApiKind.OPENROUTER;
+    // Zonder adres tonen we de routing gewoon, met het voorbeeld van OpenRouter.
+    const openRouter = routingFieldsApply(draft);
     openRouterOnly.style.display = openRouter ? '' : 'none';
     notOpenRouterHint.style.display = openRouter ? 'none' : '';
   }
@@ -402,22 +404,24 @@ export async function renderSettings() {
     el('div', { class: 'sticky-save' }, [
       el('button', { class: 'primary', text: 'Opslaan', onclick: (e) => save(e.currentTarget) }),
       el('button', { text: 'Verbinding testen', onclick: (e) => test(e.currentTarget, 'primary') }),
-      el('button', { text: 'Uitwijkroute testen', onclick: (e) => test(e.currentTarget, 'fallback') }),
       status,
     ]),
   );
 
-  /** @returns {Promise<boolean>} of er is opgeslagen */
-  async function save(button) {
+  /**
+   * @param {HTMLElement} [out] statusregel voor de melding; standaard die onderaan
+   * @returns {Promise<boolean>} of er is opgeslagen
+   */
+  async function save(button, out = status) {
     const routingErrors = validateRouting(draft);
     if (routingErrors.length > 0) {
-      status.className = 'error';
-      status.textContent = routingErrors.join(' · ');
+      out.className = 'error';
+      out.textContent = routingErrors.join(' · ');
       return false;
     }
     button.disabled = true;
-    status.className = 'muted';
-    status.textContent = 'Opslaan…';
+    out.className = 'muted';
+    out.textContent = 'Opslaan…';
     try {
       // De proxy is een host als elke andere: zonder toestemming blokkeert de
       // browser de fetch vanuit de service worker.
@@ -434,8 +438,8 @@ export async function renderSettings() {
         if (origin) {
           const granted = await chrome.permissions.request({ origins: [origin] });
           if (!granted) {
-            status.className = 'error';
-            status.textContent =
+            out.className = 'error';
+            out.textContent =
               draft.transport === 'proxy'
                 ? 'Zonder toestemming voor de proxy-host werkt de verbinding niet.'
                 : 'Zonder toestemming voor het adres van de aanbieder werkt de verbinding niet.';
@@ -446,12 +450,12 @@ export async function renderSettings() {
       }
 
       await send(Msg.SAVE_SETTINGS, { patch: draft });
-      status.className = 'muted';
-      status.textContent = 'Opgeslagen.';
+      out.className = 'muted';
+      out.textContent = 'Opgeslagen.';
       return true;
     } catch (err) {
-      status.className = 'error';
-      status.textContent = err.message;
+      out.className = 'error';
+      out.textContent = err.message;
       return false;
     } finally {
       button.disabled = false;
@@ -459,18 +463,18 @@ export async function renderSettings() {
   }
 
   /** Test één route met wat er nu in het formulier staat: eerst opslaan. */
-  async function test(button, route) {
-    if (!(await save(button))) return;
+  async function test(button, route, out = status) {
+    if (!(await save(button, out))) return;
     button.disabled = true;
-    status.className = 'muted';
-    status.textContent = route === 'fallback' ? 'Uitwijkroute testen…' : 'Testen…';
+    out.className = 'muted';
+    out.textContent = route === 'fallback' ? 'Uitwijkroute testen…' : 'Testen…';
     try {
       const { reply, provider, model } = await send(Msg.TEST_CONNECTION, { route });
-      status.className = 'badge ok';
-      status.textContent = `${route === 'fallback' ? 'Uitwijkroute' : 'Verbinding'} werkt — ${model}${provider ? ` via ${provider}` : ''}, antwoord: "${reply}"`;
+      out.className = 'badge ok';
+      out.textContent = `${route === 'fallback' ? 'Uitwijkroute' : 'Verbinding'} werkt — ${model}${provider ? ` via ${provider}` : ''}, antwoord: "${reply}"`;
     } catch (err) {
-      status.className = 'error';
-      status.textContent = err.message;
+      out.className = 'error';
+      out.textContent = err.message;
     } finally {
       button.disabled = false;
     }
@@ -529,6 +533,8 @@ function vaultSection(vault, draft) {
       ]),
     );
   } else if (!vault.unlocked) {
+    // Ontgrendelen: de bestaande wachtwoordzin, zodat een wachtwoordmanager hem invult (B-83).
+    passphrase.setAttribute('autocomplete', 'current-password');
     children.push(
       el('p', { text: 'De key staat versleuteld en is vergrendeld. Ontgrendel met je wachtwoordzin om te kunnen scannen.' }),
       passphrase,

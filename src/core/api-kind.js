@@ -24,16 +24,8 @@ export const ApiKind = Object.freeze({
   OTHER: 'other',
 });
 
-/** Bekende aanbieders: Base-URL en een voorbeeldmodel voor het instellingenscherm. */
-export const KnownProviders = Object.freeze({
-  [ApiKind.OPENROUTER]: { label: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1' },
-  [ApiKind.ANTHROPIC]: { label: 'Anthropic (Claude)', baseUrl: 'https://api.anthropic.com/v1', model: 'claude-haiku-5-5' },
-  [ApiKind.OPENAI]: { label: 'OpenAI (ChatGPT)', baseUrl: 'https://api.openai.com/v1' },
-  [ApiKind.LOCAL]: { label: 'Lokaal model (Ollama, LM Studio)', baseUrl: 'http://localhost:11434/v1' },
-  [ApiKind.OTHER]: { label: 'Ander endpoint (OpenAI-compatibel)', baseUrl: '' },
-});
-
-function hostOf(url) {
+/** Hostnaam van een adres, in kleine letters; `null` als het geen geldig adres is. */
+export function hostOf(url) {
   try {
     return new URL(String(url ?? '').trim()).hostname.toLowerCase();
   } catch {
@@ -60,3 +52,41 @@ export function apiKind(settings) {
 
 /** Werken provider-routing, presets en de uitwijkroute? Alleen bij OpenRouter. */
 export const supportsOpenRouterFeatures = (settings) => apiKind(settings) === ApiKind.OPENROUTER;
+
+/**
+ * Is er een adres ingevuld: het proxy-adres, of de Base-URL? Zonder werkt de
+ * extensie als feedlezer (B-82).
+ */
+export function hasEndpoint(settings) {
+  const value = settings?.transport === 'proxy' ? settings.proxyUrl : settings?.directBaseUrl;
+  return Boolean(String(value ?? '').trim());
+}
+
+/**
+ * Tonen en controleren we provider-routing en uitwijkroute? Bij OpenRouter, en
+ * zolang er nog geen adres is: dan toont het scherm ze met het voorbeeld van
+ * OpenRouter (CR-36). Eén afweging voor het scherm en voor `validateRouting`.
+ */
+export const routingFieldsApply = (settings) => supportsOpenRouterFeatures(settings) || !hasEndpoint(settings);
+
+/**
+ * Hoort de key van het taalmodel bij de huidige Base-URL (S-16)? De key wordt
+ * bij het opslaan aan de host van de Base-URL gebonden (`directApiKeyHost`).
+ * Verandert de Base-URL daarna naar een andere host, dan gaat de key niet mee:
+ * anders belandt bijvoorbeeld een OpenRouter-key bij een willekeurig adres.
+ * Zonder vastgelegde host is de key ongebonden en gaat hij nergens heen.
+ */
+export function keyBelongsToBaseUrl(settings) {
+  const host = hostOf(settings?.directBaseUrl);
+  const keyHost = String(settings?.directApiKeyHost ?? '').trim().toLowerCase();
+  return Boolean(host) && host === keyHost;
+}
+
+/** Waarom de key niet meegaat, in mensentaal (S-16). */
+export function keyHostMessage(settings) {
+  const keyHost = String(settings?.directApiKeyHost ?? '').trim();
+  const host = hostOf(settings?.directBaseUrl) ?? 'dit adres';
+  return keyHost
+    ? `De API-key hoort bij ${keyHost}, niet bij ${host}. Vul bij Instellingen een key in voor ${host}, of zet de Base-URL terug.`
+    : `Onbekend bij welk adres deze API-key hoort. Vul de key opnieuw in bij Instellingen en sla op.`;
+}

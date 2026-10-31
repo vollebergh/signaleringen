@@ -75,12 +75,6 @@ export const AppConfig = {
   LLM_REASONING_EFFORT: 'none',
 
   /**
-   * Andere aanbieders dan OpenRouter (B-79). Bij de Claude API en de
-   * redeneermodellen van OpenAI is denken niet uit te zetten en tellen de
-   * denktokens mee in de tokenlimiet; zonder ruimte erbij komt er dan een leeg
-   * of afgekapt antwoord. Ongebruikte ruimte kost niets.
-   */
-  /**
    * Zijpaneel (side panel / Firefox-sidebar) tonen? Verborgen sinds 0.24.0 op
    * verzoek van de gebruiker, niet verwijderd: de code in ui/sidepanel/ blijft.
    * Weer aanzetten: zet dit op true en zet in manifest.json `side_panel`, de
@@ -91,6 +85,12 @@ export const AppConfig = {
   /** Lengte van de omschrijving per publicatie in een scan zonder taalmodel (B-82). */
   READER_DESCRIPTION_MAX_CHARS: 280,
 
+  /**
+   * Andere aanbieders dan OpenRouter (B-79). Bij de Claude API en de
+   * redeneermodellen van OpenAI is denken niet uit te zetten en tellen de
+   * denktokens mee in de tokenlimiet; zonder ruimte erbij komt er dan een leeg
+   * of afgekapt antwoord. Ongebruikte ruimte kost niets.
+   */
   LLM_THINKING_HEADROOM_TOKENS: 8_000,
   /** Inspanning bij de Claude API: laag, de taken zijn eenvoudig (beoordelen, samenvatten). */
   ANTHROPIC_EFFORT: 'low',
@@ -271,6 +271,16 @@ export const AppConfig = {
   /** Kleur van de teller op het extensiepictogram (B-54). */
   BADGE_COLOR: '#4a5f7a',
 
+  /**
+   * Slotje op het pictogram bij een vergrendelde wachtwoordkluis (B-83):
+   * kleur, en grootte ten opzichte van het emoji-slotje van eerst (rechts-
+   * onder, ± 7 van 16 pixels breed). 1.4 = 140%, op verzoek van de gebruiker
+   * na UI-test ronde 7.
+   */
+  LOCK_ICON_COLOR: '#d97706',
+  LOCK_ICON_KEYHOLE_COLOR: '#1f2933',
+  LOCK_ICON_SCALE: 1.4,
+
   // Hoe lang een korte bevestiging in de UI blijft staan, of hoe lang de UI
   // wacht voor ze doorgaat naar het volgende scherm (milliseconden).
   UI_CONFIRMATION_MS: 1_500,
@@ -289,19 +299,45 @@ export const AppConfig = {
  * `proxy` stuurt in plaats daarvan naar een eigen endpoint dat de key
  * server-side zet. Nodig zodra één key door meerdere mensen gebruikt wordt.
  */
+/**
+ * Voorbeeldwaarden voor het instellingenscherm (placeholders), en de
+ * standaarden van vóór 0.25.6 voor de migratie: wat `@preset/signaleringen`
+ * vastlegt, DeepSeek V4 Flash 0731 bij DeepInfra. `deepinfra` zonder
+ * kwantisatie: DeepInfra serveert V4 Flash 0731 als fp8, en `deepinfra/fp4`
+ * geeft nul endpoints (B-D06). Vastzetten op fp8 zou een verzoek laten
+ * mislukken zodra DeepInfra van kwantisatie wisselt.
+ */
+export const SuggestedConnection = Object.freeze({
+  directBaseUrl: 'https://openrouter.ai/api/v1',
+  model: 'deepseek/deepseek-v4-flash-0731',
+  providerRouting: 'deepinfra',
+});
+
 export const DefaultSettings = {
   transport: 'direct', // 'direct' | 'proxy'
-  proxyUrl: '', // bijv. https://hp-mini.tailnet.ts.net/signaleringen
+  proxyUrl: '', // bijv. https://proxy.example.org/signaleringen
   proxyToken: '', // gedeeld token, géén LLM-provider-key
-  directBaseUrl: 'https://openrouter.ai/api/v1',
+  /**
+   * Base-URL, model en routing zijn sinds 0.25.6 leeg (wens gebruiker): het
+   * instellingenscherm toont `SuggestedConnection` als voorbeeld in het veld.
+   * Leeg betekent: geen taalmodel, de extensie werkt als feedlezer (B-82).
+   * Installaties van vóór 0.25.6 die op de oude standaarden leunden, krijgen
+   * die bij de update vastgezet (`migrateConnectionDefaults`).
+   */
+  directBaseUrl: '',
   directApiKey: '',
   /**
-   * Model en routing staan los in de instellingen, zodat het venster ook
-   * zonder de preset van de workspace werkt (productiefase). Vooringevuld met
-   * wat `@preset/signaleringen` vastlegt: DeepSeek V4 Flash 0731 bij
-   * DeepInfra. Een preset blijft mogelijk; dan geldt de routing hieronder niet.
+   * Host waarvoor de key is ingevuld (S-16): bij het opslaan van een nieuwe key
+   * vastgelegd uit de Base-URL. De key gaat alleen naar die host. Geen geheim,
+   * dus niet in de wachtwoordkluis.
    */
-  model: 'deepseek/deepseek-v4-flash-0731',
+  directApiKeyHost: '',
+  /**
+   * Model en routing staan los in de instellingen, zodat het venster ook
+   * zonder de preset van de workspace werkt (productiefase). Een preset blijft
+   * mogelijk; dan geldt de routing hieronder niet.
+   */
+  model: '',
 
   /**
    * Provider-routing (B-61, B-D13): OpenRouter-providers in volgorde van
@@ -310,13 +346,8 @@ export const DefaultSettings = {
    * OpenRouter (`deepinfra/fp8`, `decart/fp4`). Gaat ongewijzigd naar
    * `provider.order`, altijd met `allow_fallbacks: false`. Leeg: OpenRouter
    * kiest.
-   *
-   * `deepinfra` zonder kwantisatie, zoals de preset: DeepInfra serveert V4
-   * Flash 0731 als fp8, en `deepinfra/fp4` geeft nul endpoints (B-D06).
-   * Vastzetten op fp8 zou een verzoek laten mislukken zodra DeepInfra van
-   * kwantisatie wisselt.
    */
-  providerRouting: 'deepinfra',
+  providerRouting: '',
 
   /**
    * Uitwijkroute (B-D11): als de primaire route na alle pogingen tijdelijk

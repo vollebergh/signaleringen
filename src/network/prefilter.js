@@ -5,6 +5,7 @@
 
 import { AppConfig } from '../core/config.js';
 import { log } from '../core/logger.js';
+import { keyBelongsToBaseUrl } from '../core/api-kind.js';
 import { apiErrorMessage, post, providerRouting } from './llm-transport.js';
 import { sanitizeUntrusted } from './prompt-safety.js';
 
@@ -28,7 +29,9 @@ export function prefilterConnection(settings) {
   // Base-URL (standaard openrouter.ai). Een ander endpoint krijgt hem niet
   // (S-10): daar is een eigen voorfilter-key voor nodig.
   const sameHost = hostOf(settings?.prefilterEndpoint) !== null && hostOf(settings?.prefilterEndpoint) === hostOf(settings?.directBaseUrl);
-  const sharedKey = settings?.transport === 'direct' && sameHost ? (settings.directApiKey?.trim() ?? '') : '';
+  // En alleen als die key ook bij de Base-URL hoort (S-16).
+  const sharedKey =
+    settings?.transport === 'direct' && sameHost && keyBelongsToBaseUrl(settings) ? (settings.directApiKey?.trim() ?? '') : '';
   return {
     url: String(settings?.prefilterEndpoint ?? '').trim(),
     key: ownKey || sharedKey,

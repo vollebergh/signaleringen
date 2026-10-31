@@ -25,7 +25,16 @@ import { Result } from '../core/result.js';
 import * as profiles from '../data/profile-repository.js';
 import * as scans from '../data/scan-repository.js';
 import { getSourceOverview } from '../data/history-repository.js';
-import { getSettings, saveSettings, isConfigured } from '../data/settings-repository.js';
+import {
+  getSettings,
+  saveSettings,
+  isConfigured,
+  migrateConnectionDefaults,
+  migrateKeyHost,
+  versionBefore,
+  CONNECTION_DEFAULTS_EMPTIED_IN,
+  KEY_HOST_BOUND_IN,
+} from '../data/settings-repository.js';
 import { withApiKey, getVaultStatus, enableVault, unlock, lock, disableVault } from '../data/vault-repository.js';
 import { markRead } from '../data/unread-repository.js';
 import { exportProfiles, exportFilename, previewImport, importProfiles } from '../data/transfer-repository.js';
@@ -43,9 +52,16 @@ import { createMessageListener } from './router.js';
 
 // ── Levenscyclus ────────────────────────────────────────────────────────────
 
-chrome.runtime.onInstalled.addListener((details) => {
+chrome.runtime.onInstalled.addListener(async (details) => {
   log.info(`Geïnstalleerd/bijgewerkt: ${details.reason}`);
   registerContextMenus();
+  // Vóór planner en badge: die lezen de instellingen.
+  if (details.reason === 'update' && versionBefore(details.previousVersion, CONNECTION_DEFAULTS_EMPTIED_IN)) {
+    await migrateConnectionDefaults().catch((err) => log.warn('Standaarden vastzetten mislukt', err));
+  }
+  if (details.reason === 'update' && versionBefore(details.previousVersion, KEY_HOST_BOUND_IN)) {
+    await migrateKeyHost().catch((err) => log.warn('Key aan host binden mislukt', err));
+  }
   applySchedule().catch((err) => log.warn('Planner instellen mislukt', err));
   updateBadge();
 });

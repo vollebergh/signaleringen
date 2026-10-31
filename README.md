@@ -40,12 +40,15 @@ Installeer de extensie via de store. Zet hem daarna vast aan de werkbalk van
 je browser, via het puzzelstukje rechtsboven. Klik op het pictogram (de
 **popup**) en daarin op **Dashboard**.
 
-**2. Kies je aanbieder en plak je API-key.**
+**2. Vul je aanbieder, model en API-key in.**
 Ga naar **Instellingen**. Laat de route op *Eigen API-key in deze browser*
-staan, kies bij **Aanbieder** waar je key vandaan komt en plak je key bij
-**API-key**. Gebruik je niet OpenRouter, vul dan bij **Model** de modelnaam
-in, bijvoorbeeld `claude-haiku-5-5` bij Anthropic. Klik op **Opslaan**. Bij
-een andere aanbieder dan OpenRouter vraagt de browser één keer toestemming.
+staan. Vul bij **Base-URL** het adres van je aanbieder in, bijvoorbeeld
+`https://openrouter.ai/api/v1`, en plak je key bij **API-key**. Vul bij
+**Model** de modelnaam in, bijvoorbeeld `deepseek/deepseek-v4-flash-0731` bij
+OpenRouter of `claude-haiku-5-5` bij Anthropic. De lege velden tonen een
+voorbeeld. Klik op **Opslaan**. Bij een andere aanbieder dan OpenRouter vraagt
+de browser één keer toestemming. Je key hoort bij het adres waarvoor je hem
+invult: verander je later de Base-URL, vul dan ook de key van die aanbieder in.
 
 **3. Stel desgewenst een terugvalmodel en/of een filtermodel in.**
 Een taalmodel kan soms bezet zijn. Voeg desgewenst een terugvalmodel (fallback) toe.
@@ -66,9 +69,9 @@ browserprofiel kan, kan het gekozen taalmodel op jouw kosten gebruiken.
 Goed om te weten:
 
 - **Als je je computer afsluit of de extensie updatet** is de key
-  vergrendeld; je key en profielen blijven bewaard. Klik in de popup op
-  **Ontgrendelen** en typ je wachtwoordzin. Een slotje op het pictogram laat
-  zien dat de wachtwoordkluis vergrendeld is. Tot dan kan de extensie niet
+  vergrendeld; je key en profielen blijven bewaard. Een slotje op het
+  pictogram laat dat zien. Klik op het pictogram, typ je wachtwoordzin en druk
+  op Enter. Tot dan kan de extensie niet
   scannen, ook niet automatisch. Gebruik een wachtwoordmanager om je wachtwoordzin
   snel in te voeren.
 - **Key wijzigen?** Klik op **Wachtwoordkluis opheffen**, plak de nieuwe key, klik op
@@ -138,7 +141,7 @@ proberen**. Er wordt dan niets opnieuw beoordeeld.
 ## Zonder taalmodel
 
 Zonder taalmodel werkt de extensie als gewone feedlezer. Sla stap 2 tot en
-met 4 over; *Waar let je op?* mag leeg blijven.
+met 5 over; *Waar let je op?* mag leeg blijven.
 
 - Een scan haalt de publicaties op, binnen de terugkijktijd. Er gaat niets
   naar een taalmodel en het kost niets.

@@ -11,14 +11,19 @@ import { AppConfig } from '../core/config.js';
 import { Store, getAllByIndex, getByKey, transaction } from './db.js';
 import { log } from '../core/logger.js';
 
-/** Recordvorm → domeinvorm (0/1 wordt true/false). */
 /** Nieuw eerst, daarna de nieuwste publicatie eerst. */
 const newestFirst = (a, b) =>
   Number(b.isNew) - Number(a.isNew) || (b.publication?.publishedDate ?? 0) - (a.publication?.publishedDate ?? 0);
 
-/** `relevance` van een publicatie uit een scan zonder taalmodel (B-82). */
+/**
+ * `relevance` van een publicatie uit een scan zonder taalmodel (B-82): bewust
+ * niet beoordeeld. Niet te verwarren met `unjudgedCount` van een scan mét
+ * model: publicaties waarvoor het model geen oordeel gaf (een fout), die de
+ * volgende scan opnieuw aanbiedt (CR-29).
+ */
 export const UNJUDGED = 'unjudged';
 
+/** Recordvorm → domeinvorm (0/1 wordt true/false). */
 function toResult(record) {
   return {
     ...record,

@@ -3,8 +3,9 @@
  * signalering van de automatische synthese (B-54). Vervangt een melding
  * zonder dat daar de `notifications`-permissie voor nodig is.
  *
- * Zit de wachtwoordkluis op slot terwijl de key nodig is, dan staat er een
- * slotje: zonder ontgrendelen scant de extensie niet, ook niet automatisch.
+ * Zit de wachtwoordkluis op slot terwijl de key nodig is, dan krijgt het
+ * pictogram zelf een slotje (lock-icon.js): zonder ontgrendelen scant de
+ * extensie niet, ook niet automatisch. De teller blijft daarnaast zichtbaar.
  *
  * De badge zelf overleeft geen herstart van de browser; de ongelezen-status
  * wel (storage.local). Daarom zet de worker hem bij elke start opnieuw.
@@ -17,13 +18,12 @@ import { getSynthesis } from '../data/scan-repository.js';
 import { getUnread, forget } from '../data/unread-repository.js';
 import { getSettings } from '../data/settings-repository.js';
 import { isKeyLocked } from '../data/vault-repository.js';
+import { setLockIcon } from './lock-icon.js';
 
 export function badgeText(count) {
   if (count <= 0) return '';
   return count > 99 ? '99+' : String(count);
 }
-
-export const LOCKED_BADGE_TEXT = '🔒';
 
 export function badgeTitle(count, locked = false) {
   if (locked) {
@@ -58,9 +58,11 @@ export async function updateBadge() {
   try {
     const count = (await getUnreadProfileIds()).length;
     const locked = await isKeyLocked(await getSettings());
-    await chrome.action.setBadgeText({ text: locked ? LOCKED_BADGE_TEXT : badgeText(count) });
+    await chrome.action.setBadgeText({ text: badgeText(count) });
     await chrome.action.setTitle({ title: badgeTitle(count, locked) });
-    if (locked || count > 0) {
+    // Los van de teller: lukt het tekenen niet, dan staan teller en titel er wel.
+    await setLockIcon(locked).catch((err) => log.warn('Slotje op het pictogram zetten mislukt', err));
+    if (count > 0) {
       await chrome.action.setBadgeBackgroundColor({ color: AppConfig.BADGE_COLOR });
       await chrome.action.setBadgeTextColor?.({ color: '#ffffff' });
     }

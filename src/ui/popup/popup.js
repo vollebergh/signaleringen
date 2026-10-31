@@ -56,6 +56,61 @@ async function init() {
   await render();
 }
 
+/**
+ * Ontgrendelen in de popup zelf (B-83): een klik op het pictogram met het
+ * slotje, wachtwoordzin, Enter. Een echt formulier met een (verborgen)
+ * gebruikersnaam en `current-password`, zodat een wachtwoordmanager de
+ * wachtwoordzin kan invullen. Na ontgrendelen tekent de popup zich opnieuw.
+ */
+function unlockCard() {
+  const passphrase = el('input', {
+    type: 'password',
+    name: 'password',
+    autocomplete: 'current-password',
+    placeholder: 'Wachtwoordzin',
+    'aria-label': 'Wachtwoordzin',
+    required: true,
+  });
+  const button = el('button', { class: 'primary', type: 'submit', text: 'Ontgrendelen' });
+  const status = el('span', { class: 'muted' });
+
+  const form = el(
+    'form',
+    {
+      class: 'unlock',
+      onsubmit: async (event) => {
+        event.preventDefault();
+        button.disabled = true;
+        status.className = 'muted';
+        status.textContent = 'Bezig…';
+        try {
+          await send(Msg.VAULT_UNLOCK, { passphrase: passphrase.value });
+          await render();
+        } catch (err) {
+          status.className = 'error';
+          status.textContent = err.message;
+          button.disabled = false;
+          passphrase.select();
+        }
+      },
+    },
+    [
+      // Alleen voor wachtwoordmanagers: zo slaan ze de wachtwoordzin op onder
+      // een herkenbare naam.
+      el('input', { type: 'text', name: 'username', autocomplete: 'username', value: 'Signaleringen', hidden: true }),
+      passphrase,
+      el('div', { class: 'actions' }, [button, status]),
+    ],
+  );
+
+  queueMicrotask(() => passphrase.focus());
+  return el('div', { class: 'card' }, [
+    el('p', { text: 'De wachtwoordkluis is vergrendeld.' }),
+    el('p', { class: 'muted', text: 'Typ je wachtwoordzin om te kunnen scannen.' }),
+    form,
+  ]);
+}
+
 async function render() {
   try {
     // Of er genoeg is ingesteld, beslist de worker (CR-18): dezelfde regel
@@ -93,20 +148,7 @@ async function render() {
     }
 
     if (settings.transport === 'direct' && vault.exists && !vault.unlocked) {
-      content.append(
-        el('div', { class: 'card' }, [
-          el('p', { text: 'De API-key is vergrendeld.' }),
-          el('p', { class: 'muted', text: 'Ontgrendel de wachtwoordkluis met je wachtwoordzin om te kunnen scannen.' }),
-          el('button', {
-            class: 'primary',
-            text: 'Ontgrendelen',
-            onclick: () => {
-              chrome.runtime.openOptionsPage();
-              window.close();
-            },
-          }),
-        ]),
-      );
+      content.append(unlockCard());
     }
 
     if (profiles.length === 0) {

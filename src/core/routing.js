@@ -5,6 +5,7 @@
  */
 
 import { isLocalBaseUrl } from './models.js';
+import { hasEndpoint, routingFieldsApply } from './api-kind.js';
 
 /**
  * Controleert het adres van het taalmodel of de proxy (S-02): https, of http
@@ -57,11 +58,19 @@ export function validateRouting(settings) {
     }
   };
   errors.push(...connectionErrors(settings));
-  if (!String(settings.model ?? '').trim()) errors.push('Model: vul een model in');
-  check('Provider-routing', settings.providerRouting);
-  if (settings.fallbackEnabled) {
-    if (!String(settings.fallbackModel ?? '').trim()) errors.push('Uitwijkroute: vul een model in, of zet de uitwijkroute uit');
-    check('Uitwijkroute', settings.fallbackProviderRouting);
+  // Zonder adres geen taalmodel (leesmodus, B-82): dan hoeft er ook geen model.
+  if (hasEndpoint(settings) && !String(settings.model ?? '').trim()) errors.push('Model: vul een model in');
+  // Provider-routing en uitwijkroute gelden alleen bij OpenRouter; bij een
+  // andere aanbieder verbergt het instellingenscherm ze en gebruikt
+  // `routesFor` ze niet. Dan ook niet controleren, anders blokkeert Opslaan
+  // op een veld dat niet te zien is (CR-28). Zolang er geen adres is, toont het
+  // scherm ze wel, dus controleren we ze dan ook (CR-36).
+  if (routingFieldsApply(settings)) {
+    check('Provider-routing', settings.providerRouting);
+    if (settings.fallbackEnabled) {
+      if (!String(settings.fallbackModel ?? '').trim()) errors.push('Uitwijkroute: vul een model in, of zet de uitwijkroute uit');
+      check('Uitwijkroute', settings.fallbackProviderRouting);
+    }
   }
   if (settings.jevPrefilterEnabled) {
     let endpointOk = false;

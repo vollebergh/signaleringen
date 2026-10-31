@@ -22,7 +22,7 @@ globalThis.chrome = {
 };
 
 const { getUnread, markUnread, markRead, forget } = await import('../src/data/unread-repository.js');
-const { badgeText, badgeTitle, updateBadge, LOCKED_BADGE_TEXT } = await import('../src/background/badge.js');
+const { badgeText, badgeTitle, updateBadge } = await import('../src/background/badge.js');
 
 test('zonder opgeslagen status is er niets ongelezen', async () => {
   assert.deepEqual(await getUnread(), {});
@@ -74,8 +74,11 @@ test('badgetekst en titel', () => {
 
 test('slotje op het pictogram zolang de wachtwoordkluis vergrendeld is', async () => {
   const session = {};
-  const badge = { text: null, title: null };
-  chrome.runtime = { getURL: (path) => `chrome-extension://test-extension/${path}` };
+  const badge = { text: null, title: null, icons: [] };
+  chrome.runtime = {
+    getURL: (path) => `chrome-extension://test-extension/${path}`,
+    getManifest: () => ({ icons: { 16: 'icons/icon-16.png', 32: 'icons/icon-32.png', 48: 'icons/icon-48.png' } }),
+  };
   chrome.storage.session = {
     async get(key) {
       return key in session ? { [key]: session[key] } : {};
@@ -92,20 +95,26 @@ test('slotje op het pictogram zolang de wachtwoordkluis vergrendeld is', async (
       badge.title = title;
     },
     async setBadgeBackgroundColor() {},
+    async setIcon(details) {
+      badge.icons.push(details);
+    },
   };
   // Standaardinstellingen: route 'direct', geen leesbare key; de kluis ligt er wel.
   store.settings = { transport: 'direct', directApiKey: '', directBaseUrl: 'https://openrouter.ai/api/v1' };
   store.vault = { version: 1 };
   for (const k of Object.keys(store)) if (k.startsWith('unread')) delete store[k];
 
+  // Het slotje gaat op het icoon zelf, niet in de badge (transparant). Tekenen
+  // kan in Node niet (geen OffscreenCanvas): dan blijven teller en titel goed.
   await updateBadge();
-  assert.equal(badge.text, LOCKED_BADGE_TEXT);
+  assert.equal(badge.text, '');
   assert.match(badge.title, /wachtwoordkluis vergrendeld/);
 
   session.vaultSessionKey = 'sleutel';
   await updateBadge();
   assert.equal(badge.text, '');
   assert.equal(badge.title, 'Signaleringen');
+  assert.deepEqual(badge.icons.at(-1), { path: { 16: '/icons/icon-16.png', 32: '/icons/icon-32.png' } }, 'gewoon icoon terug');
 
   delete session.vaultSessionKey;
   store.settings.directBaseUrl = 'http://localhost:11434/v1';
@@ -116,4 +125,21 @@ test('slotje op het pictogram zolang de wachtwoordkluis vergrendeld is', async (
 test('titel bij vergrendelde kluis noemt ook een nieuwe signalering', () => {
   assert.match(badgeTitle(2, true), /vergrendeld.*2 profielen met een nieuwe signalering/);
   assert.equal(badgeTitle(0, false), 'Signaleringen');
+});
+
+test('slotje: getekend vanuit de hoek rechtsonder, groter met LOCK_ICON_SCALE', async () => {
+  const { drawPadlock } = await import('../src/background/lock-icon.js');
+  const calls = [];
+  const ctx = new Proxy(
+    {},
+    {
+      get: (_, name) => (name in ctx_props ? ctx_props[name] : (...args) => calls.push([name, ...args])),
+      set: () => true,
+    },
+  );
+  const ctx_props = {};
+  drawPadlock(ctx, 32, 1.4);
+  assert.deepEqual(calls.slice(1, 4), [['scale', 2, 2], ['translate', 16, 16], ['scale', 1.4, 1.4]]);
+  assert.ok(calls.some(([name]) => name === 'roundRect'));
+  assert.equal(calls.at(-1)[0], 'restore');
 });

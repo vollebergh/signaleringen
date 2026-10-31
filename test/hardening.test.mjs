@@ -19,7 +19,10 @@ const { assertValidBundle, buildEntryRecords } = await import('../src/data/trans
 const { expiredSeen } = await import('../src/data/history-repository.js');
 const { newestFirst } = await import('../src/network/feed-fetcher.js');
 const { isHttpUrl } = await import('../src/ui/shared/dom.js');
-const { AppConfig, DefaultSettings } = await import('../src/core/config.js');
+const { AppConfig, DefaultSettings, SuggestedConnection } = await import('../src/core/config.js');
+// Sinds 0.25.6 zijn Base-URL, model en routing standaard leeg; de tests gaan uit
+// van een ingestelde verbinding met OpenRouter.
+const Connected = { ...DefaultSettings, ...SuggestedConnection, directApiKeyHost: 'openrouter.ai' };
 
 /** Vervangt `fetch` tijdens `body`. */
 async function withFetch(fake, body) {
@@ -116,7 +119,7 @@ test('connectionErrors: http naar een niet-lokale host wordt geweigerd', () => {
 });
 
 test('validateRouting: neemt de verbindingscontrole mee', () => {
-  const errors = validateRouting({ ...DefaultSettings, directBaseUrl: 'http://example.com/v1' });
+  const errors = validateRouting({ ...Connected, directBaseUrl: 'http://example.com/v1' });
   assert.equal(errors.length, 1);
 });
 
@@ -129,7 +132,7 @@ test('testConnection: weigert een http-Base-URL zonder verzoek te doen', async (
     },
     () =>
       assert.rejects(
-        testConnection({ ...DefaultSettings, directBaseUrl: 'http://example.com/v1', directApiKey: 'sk-test' }),
+        testConnection({ ...Connected, directBaseUrl: 'http://example.com/v1', directApiKey: 'sk-test' }),
         /gebruik https/,
       ),
   );
@@ -143,7 +146,7 @@ test('testConnection: een netwerkfout wordt een duidelijke melding', async () =>
     async () => {
       throw new TypeError('Failed to fetch');
     },
-    () => assert.rejects(testConnection({ ...DefaultSettings, directApiKey: 'sk-test' }), /Netwerkfout: Failed to fetch/),
+    () => assert.rejects(testConnection({ ...Connected, directApiKey: 'sk-test' }), /Netwerkfout: Failed to fetch/),
   );
 });
 
@@ -225,7 +228,7 @@ test('buildEntryRecords: scans en publicaties krijgen altijd nieuwe id\'s, verwi
 // ── S-10: voorfilter-key ───────────────────────────────────────────────────
 
 test('prefilterConnection: de key van het taalmodel alleen naar dezelfde host', () => {
-  const base = { ...DefaultSettings, directApiKey: 'sk-or', jevPrefilterEnabled: true, prefilterEndpoint: 'https://openrouter.ai/api/alpha/decisions' };
+  const base = { ...Connected, directApiKey: 'sk-or', jevPrefilterEnabled: true, prefilterEndpoint: 'https://openrouter.ai/api/alpha/decisions' };
   assert.equal(prefilterConnection(base).key, 'sk-or', 'standaard: openrouter.ai bij beide');
   assert.equal(prefilterConnection({ ...base, prefilterEndpoint: 'https://ander.example/decisions' }).key, '');
   assert.equal(
@@ -264,4 +267,42 @@ test('newestFirst: houdt de nieuwste items tot het plafond', () => {
   const pubs = Array.from({ length: 5 }, (_, i) => ({ title: `t${i}`, publishedDate: i }));
   assert.equal(newestFirst(pubs, {}, 10), pubs, 'onder het plafond ongewijzigd');
   assert.deepEqual(newestFirst(pubs, {}, 2).map((p) => p.publishedDate), [4, 3]);
+});
+
+// ── S-16: de key gaat alleen naar de host waarvoor hij is ingevuld ──────────
+
+test('S-16: de key gaat alleen naar de gebonden host; elders een fout zonder verzoek', async () => {
+  const seen = [];
+  const fake = async (url, init) => {
+    seen.push([String(url), init.headers.Authorization ?? init.headers['x-api-key'] ?? null]);
+    throw new TypeError('Failed to fetch');
+  };
+  const bound = { ...Connected, model: 'm', directApiKey: 'sk-or-geheim', directApiKeyHost: 'openrouter.ai' };
+  await withFetch(fake, async () => {
+    await assert.rejects(testConnection(bound), /Netwerkfout/);
+    await assert.rejects(testConnection({ ...bound, directBaseUrl: 'https://llm.example.org/v1' }), /hoort bij openrouter\.ai, niet bij llm\.example\.org/);
+    await assert.rejects(testConnection({ ...bound, directBaseUrl: 'https://api.anthropic.com/v1' }), /hoort bij openrouter\.ai/);
+    // Lokaal model: werkt zonder key, dus het verzoek gaat wél, maar zonder key.
+    await assert.rejects(testConnection({ ...bound, directBaseUrl: 'http://192.168.1.20:11434/v1' }), /Netwerkfout/);
+    // Ongebonden key (geen host vastgelegd): nergens heen.
+    await assert.rejects(testConnection({ ...bound, directApiKeyHost: '' }), /Onbekend bij welk adres/);
+  });
+  assert.deepEqual(seen, [
+    ['https://openrouter.ai/api/v1/chat/completions', 'Bearer sk-or-geheim'],
+    ['http://192.168.1.20:11434/v1/chat/completions', null],
+  ]);
+});
+
+test('S-16: de voorfilter krijgt de key van het taalmodel alleen als die bij de Base-URL hoort', () => {
+  const base = {
+    ...Connected,
+    directApiKey: 'sk-or',
+    directApiKeyHost: 'openrouter.ai',
+    jevPrefilterEnabled: true,
+    prefilterEndpoint: 'https://openrouter.ai/api/alpha/decisions',
+  };
+  assert.equal(prefilterConnection(base).key, 'sk-or');
+  // Base-URL en endpoint op dezelfde vreemde host: de key hoort daar niet.
+  const elsewhere = { ...base, directBaseUrl: 'https://ander.example/v1', prefilterEndpoint: 'https://ander.example/decisions' };
+  assert.equal(prefilterConnection(elsewhere).key, '');
 });

@@ -53,3 +53,16 @@ header {
 .profile .status:has(> .spinner) {
   color: var(--text);
 }
+
+/* Ontgrendelen in de popup (B-83). */
+.unlock {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.unlock .actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

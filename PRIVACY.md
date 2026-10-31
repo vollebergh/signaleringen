@@ -1,6 +1,6 @@
 # Privacybeleid Signaleringen
 
-*Versie 2 · 31 oktober 2026*
+*Versie 4 · 31 oktober 2026*
 
 Signaleringen is een browserextensie die publicaties uit bronnen volgt die u zelf kiest, door een taalmodel laat beoordelen en per profiel bundelt tot één signalering.
 
@@ -32,7 +32,7 @@ Bij een scan stuurt de extensie per publicatie:
 | Uw vraag van het profiel en, indien ingevuld, de aanvullende instructie | zoals ingevoerd |
 | Uw API-key, in de autorisatiekop | n.v.t. |
 
-**Naar wie:** naar het endpoint dat u bij *Instellingen* invult. Standaard is dat de gateway OpenRouter (`openrouter.ai`); die stuurt de aanvraag door naar het model en de aanbieder die u kiest. U kunt in plaats daarvan rechtstreeks een andere aanbieder kiezen, een endpoint dat werkt zoals de API van OpenAI, een eigen proxy of een lokaal model invullen. Een lokaal model stuurt niets naar buiten.
+**Naar wie:** naar het endpoint dat u bij *Instellingen* zelf invult. Er is geen standaardendpoint: zolang u geen adres en model invult, stuurt de extensie niets naar een taalmodel. Het voorbeeld in het veld is de gateway OpenRouter (`openrouter.ai`); die stuurt de aanvraag door naar het model en de aanbieder die u kiest. U kunt ook rechtstreeks een andere aanbieder invullen, een endpoint dat werkt zoals de API van OpenAI, een eigen proxy of een lokaal model. Een lokaal model stuurt niets naar buiten.
 
 **Zonder taalmodel** stuurt de extensie niets naar een taalmodel. Ze haalt dan alleen de bronnen op die u zelf toevoegt en toont de publicaties als lijst.
 
@@ -46,7 +46,7 @@ Publicaties kunnen persoonsgegevens bevatten (bijvoorbeeld namen in een besluit)
 
 ## Welke websites de extensie benadert
 
-Alleen hosts die u zelf als bron of proxy toevoegt, plus `open.overheid.nl` en, voor de volledige tekst van Kamerstukken, `zoek.officielebekendmakingen.nl`. Toegang tot een website vraagt de extensie pas op het moment dat u de bron toevoegt, na een klik van u. Documenten worden alleen in het geheugen doorzocht; alleen het fragment rond uw zoekterm (max. 300 tekens) wordt bewaard.
+Alleen hosts die u zelf invult: als bron, als proxy, als adres van het taalmodel (Base-URL) of als endpoint van de voorfilter, plus `open.overheid.nl` en, voor de volledige tekst van Kamerstukken, `zoek.officielebekendmakingen.nl`. Toegang tot een website vraagt de extensie pas op het moment dat u de bron of het adres toevoegt, na een klik van u. Uw API-key gaat alleen naar het adres waarvoor u hem hebt ingevuld. Documenten worden alleen in het geheugen doorzocht; alleen het fragment rond uw zoekterm (max. 300 tekens) wordt bewaard.
 
 ## Geen tracking, geen verkoop
 

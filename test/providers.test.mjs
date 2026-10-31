@@ -8,9 +8,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-const { ApiKind, apiKind, apiKindOfUrl, KnownProviders } = await import('../src/core/api-kind.js');
+const { ApiKind, apiKind, apiKindOfUrl } = await import('../src/core/api-kind.js');
 const { buildRequestBody, parseAnthropicResponse, routesFor } = await import('../src/network/llm-transport.js');
-const { AppConfig, DefaultSettings } = await import('../src/core/config.js');
+const { AppConfig, DefaultSettings, SuggestedConnection } = await import('../src/core/config.js');
+// Sinds 0.25.6 zijn Base-URL, model en routing standaard leeg; de tests gaan uit
+// van een ingestelde verbinding met OpenRouter.
+const Connected = { ...DefaultSettings, ...SuggestedConnection, directApiKeyHost: 'openrouter.ai' };
+const { validateRouting } = await import('../src/core/routing.js');
+const { testConnection } = await import('../src/network/llm-transport.js');
 
 const request = { system: 'S', user: 'U', maxTokens: 100, temperature: 0.2 };
 const route = { model: 'm', provider: { order: ['deepinfra'], allow_fallbacks: false } };
@@ -23,10 +28,7 @@ test('apiKind: afgeleid uit de Base-URL; de proxy telt als OpenRouter', () => {
   assert.equal(apiKindOfUrl('https://llm.example.org/v1'), ApiKind.OTHER);
   assert.equal(apiKindOfUrl('geen adres'), ApiKind.OTHER);
   assert.equal(apiKind({ transport: 'proxy', directBaseUrl: 'https://api.openai.com/v1' }), ApiKind.OPENROUTER);
-  assert.equal(apiKind(DefaultSettings), ApiKind.OPENROUTER, 'standaard: OpenRouter');
-  for (const [kind, { baseUrl }] of Object.entries(KnownProviders)) {
-    if (baseUrl) assert.equal(apiKindOfUrl(baseUrl), kind, `voorbeeldadres van ${kind}`);
-  }
+  assert.equal(apiKind(Connected), ApiKind.OPENROUTER, 'standaard: OpenRouter');
 });
 
 test('OpenRouter: provider-blok, reasoning, temperature en max_tokens zoals altijd', () => {
@@ -72,7 +74,7 @@ test('lokaal en ander endpoint: alleen de gemeenschappelijke velden', () => {
 
 test('routesFor: buiten OpenRouter geen provider-blok en geen uitwijk', () => {
   const settings = {
-    ...DefaultSettings,
+    ...Connected,
     directBaseUrl: 'https://api.anthropic.com/v1',
     model: 'claude-haiku-5-5',
     fallbackEnabled: true,
@@ -116,9 +118,10 @@ test('testConnection naar de Claude API: /messages met x-api-key en versieheader
   };
   try {
     const result = await testConnection({
-      ...DefaultSettings,
+      ...Connected,
       directBaseUrl: 'https://api.anthropic.com/v1/',
       directApiKey: 'sk-ant-test',
+      directApiKeyHost: 'api.anthropic.com',
       model: 'claude-haiku-5-5',
     });
     assert.equal(result.reply, 'ok');
@@ -131,4 +134,31 @@ test('testConnection naar de Claude API: /messages met x-api-key en versieheader
   assert.equal(seen.headers['anthropic-version'], AppConfig.ANTHROPIC_API_VERSION);
   assert.equal(seen.headers['anthropic-dangerous-direct-browser-access'], 'true');
   assert.equal(seen.body.model, 'claude-haiku-5-5');
+});
+
+test('validateRouting: routing en uitwijk alleen controleren bij OpenRouter (CR-28)', () => {
+  // Uitwijk aangezet bij OpenRouter, toen een andere aanbieder gekozen: de
+  // velden zijn verborgen en worden niet gebruikt, dus Opslaan mag niet blokkeren.
+  const stale = { ...Connected, fallbackEnabled: true, fallbackModel: '', providerRouting: 'geen tag!' };
+  assert.equal(validateRouting(stale).length, 2, 'bij OpenRouter wel: twee fouten');
+  for (const directBaseUrl of ['https://api.anthropic.com/v1', 'https://api.openai.com/v1', 'http://localhost:11434/v1']) {
+    assert.deepEqual(validateRouting({ ...stale, directBaseUrl, model: 'model' }), [], directBaseUrl);
+  }
+  // De proxy telt als OpenRouter: daar blijft de controle.
+  assert.equal(validateRouting({ ...stale, transport: 'proxy', proxyUrl: 'https://proxy.example/v1' }).length, 2);
+});
+
+test('testConnection: zonder adres of model een duidelijke melding, geen netwerkfout (CR-34)', async () => {
+  await assert.rejects(testConnection(DefaultSettings), /Vul eerst een Base-URL en een model in/);
+  await assert.rejects(testConnection({ ...DefaultSettings, directBaseUrl: Connected.directBaseUrl }), /Vul eerst een Base-URL en een model in/);
+  await assert.rejects(testConnection({ ...DefaultSettings, transport: 'proxy' }), /Vul eerst het proxy-adres en een model in/);
+});
+
+test('validateRouting: zolang er geen adres is, worden de zichtbare routingvelden gecontroleerd (CR-36)', () => {
+  assert.deepEqual(validateRouting(DefaultSettings), [], 'leeg is in orde: leesmodus');
+  const errors = validateRouting({ ...DefaultSettings, providerRouting: 'geen tag!' });
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /geen providertag/);
+  // Met een adres van een andere aanbieder verdwijnen de velden en dus de controle.
+  assert.deepEqual(validateRouting({ ...DefaultSettings, directBaseUrl: 'https://api.openai.com/v1', model: 'm', providerRouting: 'geen tag!' }), []);
 });
